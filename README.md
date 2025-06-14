@@ -52,35 +52,35 @@ A centralized logging application resides within AppSubnet. This app must write 
 </details>
 
 <details>
-<summary><strong>Session 2</strong> (click to expand/hide)</summary>
+<summary><strong>Session 2 - Demo</strong> (click to expand/hide)</summary>
 
 <!-- No data yet -->
 
 </details>
 
 <details>
-<summary><strong>Session 3</strong> (click to expand/hide)</summary>
+<summary><strong>Session 3 - Demo</strong> (click to expand/hide)</summary>
 
 <!-- No data yet -->
 
 </details>
 
 <details>
-<summary><strong>Session 4</strong> (click to expand/hide)</summary>
+<summary><strong>Session 4 - Demo</strong> (click to expand/hide)</summary>
 
 <!-- No data yet -->
 
 </details>
 
 <details>
-<summary><strong>Session 5</strong> (click to expand/hide)</summary>
+<summary><strong>Session 5 - Demo</strong> (click to expand/hide)</summary>
 
 <!-- No data yet -->
 
 </details>
 
 <details>
-<summary><strong>Session 6</strong> (click to expand/hide)</summary>
+<summary><strong>Session 6 - Demo</strong> (click to expand/hide)</summary>
 
 <!-- No data yet -->
 
