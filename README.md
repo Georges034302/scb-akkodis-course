@@ -2,11 +2,19 @@
 SCB Azure Training Series by Akkodis. Includes slide decks and lab guides for six sessions covering IAM, threat detection, secure networking, data protection, app migration, and compliance in Azure. Designed for hands-on learning in enterprise cloud environments.
 
 ---
-## Session 1 – Demo  
-**Secure Storage Access Using ARM Template and RFC 1918 IP Strategy**
+<details>
+<summary><strong>Session 1 – Demo</strong> (click to expand/hide)</summary>
 
-This hands-on demo walks participants through deploying a secure logging architecture using private networking and storage isolation.  
-The deployment aligns with enterprise cloud security standards by enforcing private access via RFC 1918 ranges and private endpoints.
+### 🧪 Hands-On Lab: Secure Storage Access Using ARM Template and RFC 1918 IP Strategy
+
+#### 🏷️ Lab Title
+Deploy a Secure Logging Architecture with Private Endpoint and RFC 1918 IP Strategy Using ARM JSON
+
+#### 🎯 Lab Objective
+Deploy a logging subnet and storage account using RFC 1918 IP address space, and integrate it with a Private Endpoint and Private DNS Zone to enforce internal-only access — following best practice cloud security architecture.
+
+#### ✅ Lab Scenario
+A centralized logging application resides within AppSubnet. This app must write logs to an Azure Storage account, which must not be accessible over the internet.
 
 ### 🔧 Lab Steps Overview
 
@@ -40,6 +48,43 @@ The deployment aligns with enterprise cloud security standards by enforcing priv
 | 6                | A storage account that’s only accessible over the private network|
 | 7                | DNS correctly resolving via `privatelink.blob.core.windows.net`  |
 | 8                | Full validation that no public access is allowed, and internal routing works
+
+</details>
+
+<details>
+<summary><strong>Session 2</strong> (click to expand/hide)</summary>
+
+<!-- No data yet -->
+
+</details>
+
+<details>
+<summary><strong>Session 3</strong> (click to expand/hide)</summary>
+
+<!-- No data yet -->
+
+</details>
+
+<details>
+<summary><strong>Session 4</strong> (click to expand/hide)</summary>
+
+<!-- No data yet -->
+
+</details>
+
+<details>
+<summary><strong>Session 5</strong> (click to expand/hide)</summary>
+
+<!-- No data yet -->
+
+</details>
+
+<details>
+<summary><strong>Session 6</strong> (click to expand/hide)</summary>
+
+<!-- No data yet -->
+
+</details>
 
 ---
 👨‍💻 Author: Georges Bou Ghantous
