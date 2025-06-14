@@ -2,12 +2,29 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "location": { "type": "string", "defaultValue": "australiaeast" },
-    "vnetName": { "type": "string", "defaultValue": "core-vnet" },
-    "addressPrefix": { "type": "string", "defaultValue": "10.50.0.0/16" },
-    "subnetName": { "type": "string", "defaultValue": "AppSubnet" },
-    "subnetPrefix": { "type": "string", "defaultValue": "10.50.1.0/24" },
-    "storageAccountName": { "type": "string" }
+    "location": {
+      "type": "string",
+      "defaultValue": "australiaeast"
+    },
+    "vnetName": {
+      "type": "string",
+      "defaultValue": "core-vnet"
+    },
+    "addressPrefix": {
+      "type": "string",
+      "defaultValue": "10.50.0.0/16"
+    },
+    "subnetName": {
+      "type": "string",
+      "defaultValue": "AppSubnet"
+    },
+    "subnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.50.1.0/24"
+    },
+    "storageAccountName": {
+      "type": "string"
+    }
   },
   "resources": [
     {
@@ -17,7 +34,9 @@
       "location": "[parameters('location')]",
       "properties": {
         "addressSpace": {
-          "addressPrefixes": [ "[parameters('addressPrefix')]" ]
+          "addressPrefixes": [
+            "[parameters('addressPrefix')]"
+          ]
         },
         "subnets": [
           {
@@ -34,7 +53,9 @@
       "apiVersion": "2022-09-01",
       "name": "[parameters('storageAccountName')]",
       "location": "[parameters('location')]",
-      "sku": { "name": "Standard_LRS" },
+      "sku": {
+        "name": "Standard_LRS"
+      },
       "kind": "StorageV2",
       "properties": {
         "accessTier": "Hot",

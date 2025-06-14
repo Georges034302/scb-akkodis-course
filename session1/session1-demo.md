@@ -50,12 +50,29 @@ Create a file named `secure-logging.json` and paste the following:
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "location": { "type": "string", "defaultValue": "australiaeast" },
-    "vnetName": { "type": "string", "defaultValue": "core-vnet" },
-    "addressPrefix": { "type": "string", "defaultValue": "10.50.0.0/16" },
-    "subnetName": { "type": "string", "defaultValue": "AppSubnet" },
-    "subnetPrefix": { "type": "string", "defaultValue": "10.50.1.0/24" },
-    "storageAccountName": { "type": "string" }
+    "location": {
+      "type": "string",
+      "defaultValue": "australiaeast"
+    },
+    "vnetName": {
+      "type": "string",
+      "defaultValue": "core-vnet"
+    },
+    "addressPrefix": {
+      "type": "string",
+      "defaultValue": "10.50.0.0/16"
+    },
+    "subnetName": {
+      "type": "string",
+      "defaultValue": "AppSubnet"
+    },
+    "subnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.50.1.0/24"
+    },
+    "storageAccountName": {
+      "type": "string"
+    }
   },
   "resources": [
     {
@@ -65,7 +82,9 @@ Create a file named `secure-logging.json` and paste the following:
       "location": "[parameters('location')]",
       "properties": {
         "addressSpace": {
-          "addressPrefixes": [ "[parameters('addressPrefix')]" ]
+          "addressPrefixes": [
+            "[parameters('addressPrefix')]"
+          ]
         },
         "subnets": [
           {
@@ -82,7 +101,9 @@ Create a file named `secure-logging.json` and paste the following:
       "apiVersion": "2022-09-01",
       "name": "[parameters('storageAccountName')]",
       "location": "[parameters('location')]",
-      "sku": { "name": "Standard_LRS" },
+      "sku": {
+        "name": "Standard_LRS"
+      },
       "kind": "StorageV2",
       "properties": {
         "accessTier": "Hot",
@@ -98,78 +119,45 @@ Create a file named `secure-logging.json` and paste the following:
 ```
 
 ### 🔹 Step 3: Deploy the ARM Template
-
+```bash
+STORAGE_NAME="logstore$(date +%s)"  # Set a unique storage name
+```
 ```bash
 az deployment group create \
   --resource-group secure-logging-rg \
   --template-file secure-logging.json \
-  --parameters storageAccountName=logstore001
+  --parameters storageAccountName="$STORAGE_NAME"
 ```
 
 ### 🔹 Step 4: Add Private Endpoint
 
 ```bash
-STORAGE_ID=$(az storage account show \
-  --name logstore001 \
-  --resource-group secure-logging-rg \
-  --query id -o tsv)
-
-az network private-endpoint create \
-  --name storage-pe \
-  --resource-group secure-logging-rg \
-  --vnet-name core-vnet \
-  --subnet AppSubnet \
-  --private-connection-resource-id $STORAGE_ID \
-  --group-id blob \
-  --connection-name storage-pe-conn
+./create-endpoint.sh
 ```
 
 ### 🔹 Step 5: Create & Link Private DNS Zone
 
 ```bash
-az network private-dns zone create \
-  --resource-group secure-logging-rg \
-  --name privatelink.blob.core.windows.net
-
-az network private-dns link vnet create \
-  --resource-group secure-logging-rg \
-  --zone-name privatelink.blob.core.windows.net \
-  --name dns-link \
-  --virtual-network core-vnet \
-  --registration-enabled false
-
-az network private-endpoint dns-zone-group create \
-  --resource-group secure-logging-rg \
-  --endpoint-name storage-pe \
-  --name dns-zone-group \
-  --private-dns-zone privatelink.blob.core.windows.net \
-  --zone-name blob
+./create-dns.sh
 ```
 
 ---
 
 ## ✅ Post-Deployment Validation
 
-### 🔹 Step 6: Verify DNS Resolution
-
-```bash
-nslookup logstore001.blob.core.windows.net
-```
-
-### 🔹 Step 7: Confirm Public Access Blocked
+### 🔹 Step 6: Confirm Public Access Is Blocked (Run Locally or Outside VNet)
 
 ```bash
 az storage blob list \
-  --account-name logstore001 \
+  --account-name "$STORAGE_NAME" \
   --container-name logs \
   --auth-mode login
 ```
+```
+❌ Expected: Operation fails with 403 or network error — confirms internet access is disabled on the storage account.
+```
 
----
-
-## 🧪 Optional: VM-Based Testing
-
-### 🔹 Step 8: Create VM
+### 🔹 Step 7: Deploy a Test VM (Inside the VNet)
 
 ```bash
 read -s -p "Enter admin password: " VM_PASSWORD && echo
@@ -179,41 +167,58 @@ az vm create \
   --name log-test-vm \
   --vnet-name core-vnet \
   --subnet AppSubnet \
-  --image UbuntuLTS \
+  --image Ubuntu2204 \
+  --size Standard_B1s \
   --admin-username azureuser \
   --admin-password "$VM_PASSWORD" \
   --authentication-type password
 ```
 
-### 🔹 Step 9: SSH into the VM
-
-```bash
-ssh azureuser@<public-ip-of-vm>
-```
-
-### 🔹 Step 10: Test from VM
-
-```bash
-nslookup logstore001.blob.core.windows.net
-
-curl -I https://logstore001.blob.core.windows.net
-```
-
 ---
 
-## 🔐 Optional: Test Internet Blocking via NSG
+### 🔹 Step 8: SSH into the VM
 
-- Add outbound NSG rule to block `0.0.0.0/0`
-- Confirm blob access via private endpoint still works
+```bash
+VM_PUBLIC_IP=$(az vm show \
+  --resource-group secure-logging-rg \
+  --name log-test-vm \
+  --show-details \
+  --query publicIps \
+  -o tsv)
+ 
+ssh azureuser@"$VM_PUBLIC_IP"
+```
 
+### 🔹 Step 9: Test from VM
+
+```bash
+nslookup "$STORAGE_NAME".blob.core.windows.net
+
+curl -I https://"$STORAGE_NAME".blob.core.windows.net
+```
+```
+✅ Expected:
+nslookup returns 10.50.x.x (Private IP)
+curl returns 403/401 (private access working, authentication not yet provided)
+```
+---
+
+## 🔐  Step 10 (Optional): Simulate Internet Isolation via NSG
+
+- Create an NSG denying outbound to 0.0.0.0/0.\
+- Associate it with the AppSubnet or VM NIC.
+  - Confirm:
+  - Public internet is blocked ❌
+  - Blob access still works privately ✅
 ---
 
 ## 🎯 Final Validation Summary
 
-| ✅ Check                        | 🧪 How to Validate                                |
+| ✅ Check                       | 🧪 How to Validate                               |
 |--------------------------------|---------------------------------------------------|
-| DNS resolution (private IP)    | `nslookup logstore001.blob.core.windows.net`      |
-| Public access blocked          | CLI/Browser externally should fail (403/timeout) |
-| Blob access from VM            | `curl` or SDK from inside = 403/401               |
+| DNS resolution (private IP)    | `nslookup "$STORAGE_NAME".blob.core.windows.net`  |
+| Public access blocked          | CLI/Browser externally should fail (403/timeout)  |
+| Blob access from VM            | `curl` or SDK from inside VM = 403/401            |
 | Internet isolation (optional)  | NSG blocks outbound, private access still works   |
+
 ---
