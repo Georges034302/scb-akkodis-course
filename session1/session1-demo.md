@@ -26,7 +26,7 @@ A centralized logging application resides within AppSubnet. This app must write 
 - Logged in to Azure CLI (`az login`)
 - Active Azure subscription
 - Permissions to deploy VNets, Storage, Private Endpoints, and DNS Zones
-- A globally unique storage account name (e.g., `logstore001`)
+- A globally unique storage account name 
 - Internet access or Cloud Shell
 
 ---
