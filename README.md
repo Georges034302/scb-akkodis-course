@@ -10,28 +10,36 @@ The deployment aligns with enterprise cloud security standards by enforcing priv
 
 ### 🔧 Lab Steps Overview
 
-#### 1. Setup
-- Prepare Visual Studio Code or Azure Cloud Shell  
-- Ensure Azure CLI is installed and authenticated  
-- Create a new resource group in the target region  
+| Setup Step | Description                                      |
+|------------|--------------------------------------------------|
+| 1          | Create the Resource Group                        |
+| 2          | Create the ARM Template                          |
 
-#### 2. Deploy Infrastructure
-- Define an ARM template with a custom VNet and AppSubnet  
-- Deploy an Azure Storage account with public access disabled  
-- Provision a Private Endpoint for the storage account  
-- Create and link a Private DNS Zone for internal name resolution  
+| Deploy Step | Description                                     |
+|-------------|-------------------------------------------------|
+| 1           | Deploy the ARM Template                         |
+| 2           | Create the Private Endpoint                     |
+| 3           | Create and Link Private DNS Zone                |
 
-#### 3. Test and Validate
-- Confirm DNS resolution returns a private IP address  
-- Attempt access from outside the network to ensure it fails  
-- Deploy a Linux VM in the subnet and test access to the storage privately  
-- Optionally, enforce internet isolation using NSG outbound rules  
+| Test Step   | Description                                     |
+|-------------|-------------------------------------------------|
+| 1           | Verify DNS Resolution (from inside the VNet)    |
+| 2           | Confirm Public Access Blocked                   |
+| 3           | (Optional) Create a Test VM in the VNet         |
+| 4           | (Optional) SSH into the Test VM                 |
+| 5           | (Optional) Test DNS and Storage Access from VM  |
+| 6           | (Optional) Test Internet Blocking via NSG       |
 
-### ✅ Expected Outcome
-- A secure VNet using `10.50.0.0/16` with subnetting  
-- A storage account that’s only accessible over the private network  
-- DNS correctly resolving via `privatelink.blob.core.windows.net`  
-- Full validation that no public access is allowed, and internal routing works
+| Expected Outcome | Description                                                      |
+|------------------|------------------------------------------------------------------|
+| 1                | Storage account is only accessible privately                     |
+| 2                | DNS resolves to private IP inside the VNet                       |
+| 3                | Public access is blocked as expected                             |
+| 4                | Private endpoint and DNS zone are validated                      |
+| 5                | A secure VNet using `10.50.0.0/16` with subnetting               |
+| 6                | A storage account that’s only accessible over the private network|
+| 7                | DNS correctly resolving via `privatelink.blob.core.windows.net`  |
+| 8                | Full validation that no public access is allowed, and internal routing works
 
 ---
 👨‍💻 Author: Georges Bou Ghantous
