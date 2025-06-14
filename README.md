@@ -35,5 +35,6 @@ The deployment aligns with enterprise cloud security standards by enforcing priv
 
 ---
 👨‍💻 Author: Georges Bou Ghantous
-Azure Training Series by Akkodis, featuring hands-on labs and demos across six sessions on IAM, threat detection, secure networking, data protection, app migration, and compliance in Azure.
+
+* Azure Training Series by Akkodis, featuring hands-on labs and demos across six sessions on IAM, threat detection, secure networking, data protection, app migration, and compliance in Azure.
 ---
