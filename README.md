@@ -65,38 +65,32 @@ Simulate and detect excessive secret access by a privileged identity, trigger a 
 #### ✅ Lab Scenario
 A privileged user retrieves secrets from Azure Key Vault more frequently than expected, indicating possible insider threat or credential misuse.
 
-### 🔧 Lab Steps Overview
+## 🔧 Lab Steps Overview
 
 | Setup Step | Description                                      |
-|------------|--------------------------------------------------|
-| 1          | Create the Resource Group                        |
-| 2          | Create the ARM Template                          |
+| ---------- | ------------------------------------------------ |
+| 1          | Create Resource Group and Key Vault              |
+| 2          | Assign Key Vault Contributor role to a test user |
+| 3          | Enable diagnostic logging to Log Analytics       |
 
-| Deploy Step | Description                                     |
-|-------------|-------------------------------------------------|
-| 1           | Deploy the ARM Template                         |
-| 2           | Create the Private Endpoint                     |
-| 3           | Create and Link Private DNS Zone                |
+| Detection Step | Description                                  |
+| -------------- | -------------------------------------------- |
+| 1              | Simulate 10 secret retrievals using CLI loop |
+| 2              | Author Sentinel Analytics Rule using KQL     |
 
-| Test Step   | Description                                     |
-|-------------|-------------------------------------------------|
-| 1           | Verify DNS Resolution (from inside the VNet)    |
-| 2           | Confirm Public Access Blocked                   |
-| 3           | (Optional) Create a Test VM in the VNet         |
-| 4           | (Optional) SSH into the Test VM                 |
-| 5           | (Optional) Test DNS and Storage Access from VM  |
-| 6           | (Optional) Test Internet Blocking via NSG       |
+| Response Step | Description                                 |
+| ------------- | ------------------------------------------- |
+| 1             | Create Logic App Playbook for auto-response |
+| 2             | Connect playbook to analytics rule          |
 
-| Expected Outcome | Description                                                      |
-|------------------|------------------------------------------------------------------|
-| 1                | Storage account is only accessible privately                     |
-| 2                | DNS resolves to private IP inside the VNet                       |
-| 3                | Public access is blocked as expected                             |
-| 4                | Private endpoint and DNS zone are validated                      |
-| 5                | A secure VNet using `10.50.0.0/16` with subnetting               |
-| 6                | A storage account that’s only accessible over the private network|
-| 7                | DNS correctly resolving via `privatelink.blob.core.windows.net`  |
-| 8                | Full validation that no public access is allowed, and internal routing
+| Expected Outcome | Description                                                |
+| ---------------- | ---------------------------------------------------------- |
+| 1                | Sentinel incident created upon detection                   |
+| 2                | User account automatically disabled via Graph API          |
+| 3                | SOC notified via Teams                                     |
+| 4                | Event archived and metrics visible in Workbooks/Dashboards |
+| 5                | End-to-end audit-traceable response workflow confirmed     |
+
 </details>
 
 <details>
