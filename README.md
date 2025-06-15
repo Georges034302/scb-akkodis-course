@@ -94,9 +94,40 @@ A privileged user retrieves secrets from Azure Key Vault more frequently than ex
 </details>
 
 <details>
-<summary><strong>Session 3 - Demo</strong> (click to expand/hide)</summary>
+<summary><strong>Session 3 – Demo</strong> (click to expand/hide)</summary>
 
-<!-- No data yet -->
+### 🧪 Hands-On Lab: NSG Flow Visibility Lab – Monitor and Block Intra-VNet Traffic
+
+#### 🏷️ Lab Title
+Simulate and monitor denied traffic within Azure Virtual Networks using Network Security Groups (NSGs) and Flow Logs
+
+#### 🎯 Lab Objective
+Deploy a 2-tier segmented network with enforced NSG rules to block unauthorized east-west traffic. Use Network Watcher to monitor and validate traffic visibility and rule effectiveness.
+
+#### ✅ Lab Scenario
+A frontend VM (`vm-web`) is placed in a web subnet and attempts SSH access to a backend VM (`vm-app`) in a secure subnet. An NSG rule blocks the connection, and flow logs are used to confirm denied traffic events.
+
+---
+
+### 🔧 Lab Steps Overview
+
+| Setup Step | Description                                         |
+|------------|-----------------------------------------------------|
+| 1          | Deploy infrastructure using Bicep or CLI            |
+| 2          | Apply NSG to deny SSH from web-subnet to app-subnet |
+| 3          | Enable Network Watcher in the region                |
+
+| Validation Step | Description                                    |
+|-----------------|------------------------------------------------|
+| 1               | Attempt SSH from vm-web to vm-app              |
+| 2               | Confirm connection is denied due to NSG rule   |
+| 3               | Analyze NSG Flow Logs for denied traffic       |
+
+| Expected Outcome | Description                                   |
+|------------------|-----------------------------------------------|
+| 1                | East-west SSH blocked by explicit NSG rule    |
+| 2                | Flow logs show denied TCP/22 traffic          |
+| 3                | Demonstrates intra-VNet traffic visibility    |
 
 </details>
 
