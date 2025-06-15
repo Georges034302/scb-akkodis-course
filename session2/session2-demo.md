@@ -20,14 +20,20 @@
 **Goal:** Deploy a controlled lab environment
 
 ```bash
+RG="demo-rg"
+LOCATION="australiaeast"
 az group create \
-  --name Demo-RG \
-  --location australiaeast
+  --name "$RG" \
+  --location "$LOCATION"
 
+az provider register \
+  --namespace Microsoft.KeyVault
+
+KV_NAME="DemoVault$(date +%s)"
 az keyvault create \
-  --name DemoVault \
-  --resource-group Demo-RG \
-  --location australiaeast
+  --name $KV_NAME \
+  --resource-group "$RG" \
+  --location "$LOCATION"
 ```
 
 ---
@@ -37,14 +43,17 @@ az keyvault create \
 **Goal:** Simulate real-world privileged access
 
 1. Identify or create a user (`PrivilegedLabUser`)
-2. Assign **Key Vault Contributor** role on the vault:
+2. Assign **Key Vault Contributor** role on the vault (using Portal):
 
-```bash
-az role assignment create \
-  --assignee <user-upn> \
-  --role 'Key Vault Contributor' \
-  --scope /subscriptions/<subscription-id>/resourceGroups/Demo-RG/providers/Microsoft.KeyVault/vaults/DemoVault
-```
+   - Go to the Azure Portal: [https://portal.azure.com](https://portal.azure.com)
+   - Navigate to **Resource Groups** > **Demo-RG**
+   - Open your Key Vault (e.g., **DemoVault1749993950**)
+   - In the left-hand menu, select **Access Control (IAM)** > **Role assignments**
+   - Click **➕ Add** > **Add role assignment**
+   - For **Role**, select **Key Vault Contributor**
+   - For **Assign access to**, choose **User, group, or service principal**
+   - Select the user, group, or service principal you want to assign the role to
+   - Click **Save**
 
 ---
 
@@ -53,12 +62,31 @@ az role assignment create \
 **Goal:** Forward logs to Sentinel for analytics
 
 1. Ensure you have a Log Analytics Workspace connected to Sentinel
+   
+```bash
+az monitor log-analytics workspace create \
+  --resource-group Demo-RG \
+  --workspace-name log-demoworkspace \
+  --location australiaeast
+```
+
 2. Enable diagnostic logging:
 
 ```bash
+WORKSPACE_ID=$(az monitor log-analytics workspace show \
+  --resource-group Demo-RG \
+  --workspace-name log-demoworkspace \
+  --query id -o tsv)
+
+SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+KV_NAME=$(az keyvault list --resource-group Demo-RG --query "[0].name" -o tsv)
+
 az monitor diagnostic-settings create \
-  --resource /subscriptions/<subscription-id>/resourceGroups/Demo-RG/providers/Microsoft.KeyVault/vaults/DemoVault \
-  --workspace <workspace-id> \
+  --resource "$KV_NAME" \
+  --resource-group Demo-RG \
+  --resource-type "vaults" \
+  --resource-namespace "Microsoft.KeyVault" \
+  --workspace "$WORKSPACE_ID" \
   --name "LogToSentinel" \
   --logs '[{"category": "AuditEvent","enabled": true}]'
 ```
