@@ -185,24 +185,41 @@ Detect a spike in secret retrieval by a single user.
 
 ### 🔹 Step 6: Create a Logic App Playbook for Automated Response
 
-**Goal:** Automate containment when an alert is triggered
+**Goal:** Automate containment or response actions when a Sentinel incident is triggered.
 
-1. Go to **Sentinel > Automation > Playbooks > + Add**
-2. Use **Trigger: When an incident is created in Sentinel**
-3. Add actions:
-   - **Condition**: Is `UserPrincipalName` in Privileged Group?
-   - **Disable user** (AzureAD or Graph API)
-   - **Send notification** to Microsoft Teams or Email
-   - **Create ITSM ticket** (optional: ServiceNow or Logic App connector)
-   - **Log action** to Storage Account or Log Analytics
+1. Navigate to **Microsoft Sentinel > Automation**.
+2. Click the **Playbooks** tab.
+3. Click **➕ Add > Add new playbook (Consumption)**.
+4. Enter the name, subscription, resource group, and region, then click **Create**.
+5. Once the Logic App designer opens, select the trigger:  
+   - **When a response to an Azure Sentinel alert is triggered**
+
+**✅ Add the Following Actions (inside the Logic App):**
+- **Condition:**  
+  - Check if `UserPrincipalName` (from the incident entities) belongs to a privileged Azure AD group (via Graph API or Azure AD connector).
+- **Disable User Account (optional):**  
+  - Use Microsoft Graph API or Azure AD connector to disable the user.
+- **Send Notification:**  
+  - Send a message to Microsoft Teams, Email, or both — include Incident Name, Severity, Entities, and TimeGenerated.
+- **Create ITSM Ticket (optional):**  
+  - Use ServiceNow, Jira, or built-in Logic App connectors to log a ticket.
+- **Log Action:**  
+  - Write incident metadata and playbook action results to:
+    - Azure Storage Account, or
+    - Log Analytics (e.g., `CustomLogs_SentinelPlaybooks_CL`)
+- **Save and publish** the Logic App.
 
 ---
 
 ### 🔹 Step 7: Connect the Playbook to the Alert Rule
 
-1. Open the Analytics Rule created earlier
-2. Go to the **Automated Response** tab
-3. Select your Logic App under “Trigger playbook on alert”
+**Goal:** Link the playbook to run automatically when the detection rule fires.
+
+1. Go to **Microsoft Sentinel > Analytics**.
+2. Open the Analytics Rule you created earlier (e.g., **Excessive Secret Access Attempt**).
+3. Go to the **Automated response** tab.
+4. Under **Trigger playbook on alert**, select your newly created Logic App.
+5. Click **Apply**, then **Save** the rule.
 
 ---
 
