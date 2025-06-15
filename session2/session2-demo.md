@@ -12,6 +12,7 @@
 ---
 
 ## 📉 Step-by-Step Lab Instructions
+- Use Azure Cloud Shell - Azure CLI: 👉 https://shell.azure.com
 
 ---
 
@@ -104,25 +105,81 @@ do
 done
 ```
 
-You can also use PowerShell or SDK scripts to automate parallel requests.
-
+Before running this, ensure your user (e.g., <your-azure-account-email>) has been assigned the Key Vault Secrets User role on the vault.
+- Go to the Key Vault in Azure Portal (e.g., DemoVault...)
+- Click Access control (IAM) → + Add → Add role assignment
+- Select role: Key Vault Secrets User
+- Assign access to: User
+- Select your own name from the list
+- Click Review + assign
 ---
 
 ### 🔹 Step 5: Create KQL Analytics Rule in Microsoft Sentinel
 
-**Goal:** Detect spike in secret retrieval by a single user
+#### **Goal:**  
+Detect a spike in secret retrieval by a single user.
 
-```kql
-AuditLogs
-| where ActivityDisplayName == "Get Secret"
-| summarize AccessCount = count() by UserPrincipalName, bin(TimeGenerated, 5m)
-| where AccessCount > 5
-```
+---
 
-- Go to **Microsoft Sentinel > Analytics > + Create Rule**
-- Use the KQL above in the Detection rule logic
-- Set evaluation interval (every 5 min) and alert threshold
-- Map relevant entities (UserPrincipalName)
+#### **A. Enable Microsoft Sentinel on Your Workspace**
+
+1. Go to the [Azure Portal](https://portal.azure.com).
+2. In the top search bar, type **Microsoft Sentinel** and open it.
+3. Click **➕ Add**.
+4. In the **Subscription** dropdown, select the subscription where your Log Analytics workspace was created.
+5. In the **Workspace** dropdown, select your workspace (e.g., `log-demoworkspace` in the `Demo-RG` resource group).
+6. Click **Add Microsoft Sentinel** to enable it on your workspace.
+
+---
+
+#### **B. Create Analytics Rule to Detect Excessive Secret Access Attempts**
+
+1. In Microsoft Sentinel, select your workspace (e.g., `log-demoworkspace`).
+2. In the left pane, select **Analytics**.
+3. Click **➕ Create > Scheduled query rule**.
+
+**General Tab:**
+- **Rule Name:** Excessive Secret Access Attempt
+- **Description:** Detects more than 5 secret access attempts by a single user within a 5-minute window.
+
+**Set Rule Logic Tab:**
+- Paste the following KQL query into the rule logic section:
+  ```kusto
+  AuditLogs
+  | where ActivityDisplayName == "Get Secret"
+  | extend UPN = tostring(InitiatedBy.user.userPrincipalName)
+  | summarize AccessCount = count() by UPN, bin(TimeGenerated, 5m)
+  | where AccessCount > 5
+  ```
+- **View query results:** Click *View query results* to validate the output (optional but recommended).
+- **Query scheduling:** Every 5 minutes
+- **Lookup data from the last:** 5 minutes
+- **Start running:** Choose a future start time or leave default (e.g., 17/06/2025, 12:00 PM)
+- **Alert threshold:** Leave at 0 (generate an alert for any result returned)
+- **Event grouping:** Optional — group all results into a single alert or group by UPN
+- **Suppression:** Leave unchecked unless you want to prevent multiple alerts for the same behavior within a suppression window
+
+**Entity Mapping Tab:**
+- **Map User → UPN**
+
+**Custom Details Tab:**
+- (Optional) Add custom fields from the query you wish to expose in alerts.
+
+**Actions Tab (Optional):**
+- Add a playbook (Logic App) if you wish to automate the response (e.g., disable the user or send a Teams alert).
+
+---
+
+4. Click **Review + create**, then **Create** to finalize the rule.
+
+---
+
+> **Azure Best Practice:**  
+> - Always use Azure Portal or Azure CLI for configuring Sentinel and analytics rules.
+> - Use clear, descriptive rule names and document your detection logic.
+> - Schedule queries at intervals that balance detection speed and resource usage.
+> - Map entities for better incident investigation and automation.
+> - Use playbooks for automated response to high-risk incidents.
 
 ---
 
