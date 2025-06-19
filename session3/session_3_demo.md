@@ -19,223 +19,21 @@
 
 ---
 
-#### 🧱 Option A: Deploy with Bicep
-
-1. Save the following Bicep file as `nsg_flow_lab.bicep`:
-
-```bicep
-param location string = 'australiaeast'
-param adminUsername string = 'azureuser'
-@secure()
-param adminPassword string
-
-resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
-  name: 'rg-flow-lab'
-  location: location
-}
-
-resource sa 'Microsoft.Storage/storageAccounts@2022-09-01' = {
-  name: 'flowlogstorage${uniqueString(resourceGroup().id)}'
-  location: location
-  sku: { name: 'Standard_LRS' }
-  kind: 'StorageV2'
-  properties: {
-    accessTier: 'Hot'
-  }
-}
-
-resource law 'Microsoft.OperationalInsights/workspaces@2021-06-01' = {
-  name: 'flowlog-law'
-  location: location
-  properties: {
-    sku: { name: 'PerGB2018' }
-    retentionInDays: 30
-  }
-}
-
-resource vnet 'Microsoft.Network/virtualNetworks@2022-05-01' = {
-  name: 'vnet-demo'
-  location: location
-  properties: {
-    addressSpace: {
-      addressPrefixes: ['10.100.0.0/16']
-    }
-    subnets: [
-      {
-        name: 'web-subnet'
-        properties: {
-          addressPrefix: '10.100.1.0/24'
-        }
-      }
-      {
-        name: 'app-subnet'
-        properties: {
-          addressPrefix: '10.100.2.0/24'
-          networkSecurityGroup: {
-            id: nsg.id
-          }
-        }
-      }
-    ]
-  }
-}
-
-resource nsg 'Microsoft.Network/networkSecurityGroups@2022-05-01' = {
-  name: 'nsg-app'
-  location: location
-  properties: {
-    securityRules: [
-      {
-        name: 'deny-web-to-app'
-        properties: {
-          priority: 100
-          direction: 'Inbound'
-          access: 'Deny'
-          protocol: 'Tcp'
-          sourceAddressPrefix: '10.100.1.0/24'
-          sourcePortRange: '*'
-          destinationAddressPrefix: '*'
-          destinationPortRange: '22'
-        }
-      }
-    ]
-  }
-}
-
-resource nicWeb 'Microsoft.Network/networkInterfaces@2022-07-01' = {
-  name: 'vm-web-nic'
-  location: location
-  properties: {
-    ipConfigurations: [
-      {
-        name: 'ipconfig1'
-        properties: {
-          subnet: {
-            id: vnet.properties.subnets[0].id
-          }
-          privateIPAllocationMethod: 'Dynamic'
-        }
-      }
-    ]
-  }
-}
-
-resource nicApp 'Microsoft.Network/networkInterfaces@2022-07-01' = {
-  name: 'vm-app-nic'
-  location: location
-  properties: {
-    ipConfigurations: [
-      {
-        name: 'ipconfig1'
-        properties: {
-          subnet: {
-            id: vnet.properties.subnets[1].id
-          }
-          privateIPAllocationMethod: 'Dynamic'
-        }
-      }
-    ]
-  }
-}
-
-resource vmWeb 'Microsoft.Compute/virtualMachines@2023-03-01' = {
-  name: 'vm-web'
-  location: location
-  properties: {
-    hardwareProfile: { vmSize: 'Standard_B1s' }
-    osProfile: {
-      computerName: 'vm-web'
-      adminUsername: adminUsername
-      adminPassword: adminPassword
-    }
-    storageProfile: {
-      imageReference: {
-        publisher: 'Canonical'
-        offer: 'UbuntuServer'
-        sku: '18_04-lts'
-        version: 'latest'
-      }
-      osDisk: {
-        createOption: 'FromImage'
-      }
-    }
-    networkProfile: {
-      networkInterfaces: [
-        {
-          id: nicWeb.id
-        }
-      ]
-    }
-  }
-}
-
-resource vmApp 'Microsoft.Compute/virtualMachines@2023-03-01' = {
-  name: 'vm-app'
-  location: location
-  properties: {
-    hardwareProfile: { vmSize: 'Standard_B1s' }
-    osProfile: {
-      computerName: 'vm-app'
-      adminUsername: adminUsername
-      adminPassword: adminPassword
-    }
-    storageProfile: {
-      imageReference: {
-        publisher: 'Canonical'
-        offer: 'UbuntuServer'
-        sku: '18_04-lts'
-        version: 'latest'
-      }
-      osDisk: {
-        createOption: 'FromImage'
-      }
-    }
-    networkProfile: {
-      networkInterfaces: [
-        {
-          id: nicApp.id
-        }
-      ]
-    }
-  }
-}
-
-resource flowLog 'Microsoft.Network/networkWatchers/flowLogs@2022-05-01' = {
-  name: 'networkWatcher_australiaeast/flowlog-nsg-app'
-  location: location
-  properties: {
-    targetResourceId: nsg.id
-    enabled: true
-    storageId: sa.id
-    format: {
-      type: 'JSON'
-      version: 2
-    }
-    flowAnalyticsConfiguration: {
-      networkWatcherFlowAnalyticsConfiguration: {
-        enabled: true
-        workspaceId: law.properties.customerId
-        workspaceRegion: location
-        workspaceResourceId: law.id
-        trafficAnalyticsInterval: 10
-      }
-    }
-  }
-  dependsOn: [
-    sa
-    law
-    nsg
-  ]
-}
-```
-
-2. Deploy the Bicep file:
+#### 🧱 Option A: Create Resource group and deploy the Bicep file `nsg_flow.bicep`
 
 ```bash
-az group create --name rg-flow-lab --location australiaeast
+az group create \
+  --name rg-flow-lab \
+  --location australiaeast
+
+az network watcher configure \
+  --locations australiaeast \
+  --resource-group rg-flow-lab \
+  --enabled true
+
 az deployment group create \
   --resource-group rg-flow-lab \
-  --template-file nsg_flow_lab.bicep \
+  --template-file nsg_flow.bicep \
   --parameters adminPassword='YourSecureP@ssword123'
 ```
 
@@ -244,91 +42,9 @@ az deployment group create \
 #### 💻 Option B: Deploy Using Azure CLI
 
 ```bash
-# Set variables
-RG="rg-flow-lab"
-LOCATION="australiaeast"
-VNET="vnet-demo"
-SUBNET_WEB="web-subnet"
-SUBNET_APP="app-subnet"
-NSG="nsg-app"
-USERNAME="azureuser"
-PASSWORD="YourSecureP@ssword123"
-VM_WEB="vm-web"
-VM_APP="vm-app"
-
-# Create resource group
-az group create --name $RG --location $LOCATION
-
-# Create VNet and subnets
-az network vnet create \
-  --resource-group $RG \
-  --name $VNET \
-  --address-prefix 10.100.0.0/16 \
-  --subnet-name $SUBNET_WEB \
-  --subnet-prefix 10.100.1.0/24
-
-az network vnet subnet create \
-  --resource-group $RG \
-  --vnet-name $VNET \
-  --name $SUBNET_APP \
-  --address-prefix 10.100.2.0/24
-
-# Create NSG and rule
-az network nsg create --resource-group $RG --name $NSG
-
-az network nsg rule create \
-  --resource-group $RG \
-  --nsg-name $NSG \
-  --name deny-web-to-app \
-  --priority 100 \
-  --direction Inbound \
-  --access Deny \
-  --protocol Tcp \
-  --source-address-prefixes 10.100.1.0/24 \
-  --source-port-ranges '*' \
-  --destination-address-prefixes '*' \
-  --destination-port-ranges 22
-
-# Associate NSG to app-subnet
-az network vnet subnet update \
-  --resource-group $RG \
-  --vnet-name $VNET \
-  --name $SUBNET_APP \
-  --network-security-group $NSG
-
-# Create NICs
-az network nic create \
-  --resource-group $RG \
-  --name ${VM_WEB}-nic \
-  --vnet-name $VNET \
-  --subnet $SUBNET_WEB
-
-az network nic create \
-  --resource-group $RG \
-  --name ${VM_APP}-nic \
-  --vnet-name $VNET \
-  --subnet $SUBNET_APP
-
-# Create VMs
-az vm create \
-  --resource-group $RG \
-  --name $VM_WEB \
-  --nics ${VM_WEB}-nic \
-  --image UbuntuLTS \
-  --admin-username $USERNAME \
-  --admin-password $PASSWORD \
-  --authentication-type password
-
-az vm create \
-  --resource-group $RG \
-  --name $VM_APP \
-  --nics ${VM_APP}-nic \
-  --image UbuntuLTS \
-  --admin-username $USERNAME \
-  --admin-password $PASSWORD \
-  --authentication-type password
+cd session3
+bash nsg_flow.sh
 ```
-
 ---
 
 ### 🔍 Step 2: Post-Deployment Testing
@@ -417,4 +133,9 @@ A table showing denied SSH traffic from vm-web to vm-app:
 - Analyzed logs with KQL in Log Analytics
 
 ✅ **Lab Complete**
+
+---
+
+
+
 
