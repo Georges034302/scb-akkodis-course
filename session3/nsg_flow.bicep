@@ -76,14 +76,14 @@ resource vnet 'Microsoft.Network/virtualNetworks@2022-05-01' = {
   }
 }
 
-resource publicIp 'Microsoft.Network/publicIPAddresses@2022-05-01' = {
+resource publicIpWeb 'Microsoft.Network/publicIPAddresses@2022-09-01' = {
   name: 'vm-web-pip'
   location: location
+  sku: {
+    name: 'Basic'
+  }
   properties: {
     publicIPAllocationMethod: 'Dynamic'
-    sku: {
-      name: 'Basic'
-    }
   }
 }
 
@@ -100,7 +100,7 @@ resource nicWeb 'Microsoft.Network/networkInterfaces@2022-07-01' = {
           }
           privateIPAllocationMethod: 'Dynamic'
           publicIPAddress: {
-            id: publicIp.id
+            id: publicIpWeb.id
           }
         }
       }
