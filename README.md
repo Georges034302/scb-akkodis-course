@@ -134,7 +134,46 @@ A frontend VM (`vm-web`) is placed in a web subnet and attempts SSH access to a 
 <details>
 <summary><strong>Session 4 - Demo</strong> (click to expand/hide)</summary>
 
-<!-- No data yet -->
+### 🧪 Hands-On Lab: Immutable Storage for Audit Compliance
+
+#### 🏷️ Lab Title
+Configure Immutable Blob Storage with Protected Append Writes and Legal Hold Using Azure CLI and Portal
+
+#### 🎯 Lab Objective
+Implement enterprise-grade immutable storage in Azure Blob to retain critical logs for 7 years in WORM (Write Once Read Many) mode, using CLI and Portal.
+
+#### ✅ Lab Scenario
+You are tasked with ensuring security audit logs are immutable and verifiable for a 7-year compliance period.
+
+A storage account and container are deployed with a time-based WORM policy (2555 days), protected append writes, and (optionally) a legal hold.
+
+---
+
+### 🔧 Lab Steps Overview
+
+| Setup Step | Description                                         |
+|------------|-----------------------------------------------------|
+| 1          | Login to Azure CLI                                  |
+| 2          | Create resource group and storage account           |
+| 3          | Create blob container                               |
+| 4          | Set immutability policy (WORM, append writes)       |
+| 5          | Upload sample log file                              |
+| 6          | Lock immutability policy                            |
+| 7          | (Optional) Apply legal hold                         |
+
+| Validation Step | Description                                    |
+|-----------------|------------------------------------------------|
+| 1               | Attempt to delete blob (should fail)           |
+| 2               | Check immutability policy status               |
+| 3               | Confirm append writes are allowed              |
+| 4               | (Optional) Check legal hold status             |
+
+| Expected Outcome | Description                                   |
+|------------------|-----------------------------------------------|
+| 1                | Blob container is immutable for 7 years       |
+| 2                | Blob deletion is blocked by WORM policy       |
+| 3                | Append writes succeed, but deletes/updates fail|
+| 4                | Legal hold is visible and enforced             |
 
 </details>
 
