@@ -35,26 +35,30 @@ az keyvault create \
   --name $KV_NAME \
   --resource-group "$RG" \
   --location "$LOCATION"
+
+az keyvault secret set \
+  --vault-name "$KV_NAME" \
+  --name testsecret \
+  --value "demo-value"
 ```
 
 ---
 
-### 🔹 Step 2: Assign a Privileged Role to a Lab User
+### 🔹 Step 2: Assign a Privileged Role 
 
-**Goal:** Simulate real-world privileged access
+**Goal:** Assign **Key Vault Contributor** role on the vault (using Portal):
 
-1. Identify or create a user (`PrivilegedLabUser`)
-2. Assign **Key Vault Contributor** role on the vault (using Portal):
-
-   - Go to the Azure Portal: [https://portal.azure.com](https://portal.azure.com)
-   - Navigate to **Resource Groups** > **Demo-RG**
-   - Open your Key Vault (e.g., **DemoVault1749993950**)
-   - In the left-hand menu, select **Access Control (IAM)** > **Role assignments**
-   - Click **➕ Add** > **Add role assignment**
-   - For **Role**, select **Key Vault Contributor**
-   - For **Assign access to**, choose **User, group, or service principal**
-   - Select the user, group, or service principal you want to assign the role to
-   - Click **Save**
+  - Go to the Azure Portal: [https://portal.azure.com](https://portal.azure.com)
+  - Navigate to **Resource Groups** > **Demo-RG**
+  - Open your Key Vault (e.g., **DemoVault1749993950**)
+  - In the left-hand menu, select **Access Control (IAM)** > **Role assignments**
+  - Click **➕ Add** > **Add role assignment**
+  - For **Role**, select **Key Vault Administrator**
+  - For **Assign access to**, choose **User, group, or service principal**
+  - Select the user, group, or service principal you want to assign the role to
+  - Click **Save**
+  - Click Review + assign
+---
 
 ---
 
@@ -94,27 +98,7 @@ az monitor diagnostic-settings create \
 
 ---
 
-### 🔹 Step 4: Simulate Abnormal Secret Access
-
-**Goal:** Trigger a brute-force–like pattern to mimic insider misuse
-
-```bash
-for i in {1..10}
-do
-  az keyvault secret show --vault-name DemoVault --name testsecret
-done
-```
-
-Before running this, ensure your user (e.g., <your-azure-account-email>) has been assigned the Key Vault Secrets User role on the vault.
-- Go to the Key Vault in Azure Portal (e.g., DemoVault...)
-- Click Access control (IAM) → + Add → Add role assignment
-- Select role: Key Vault Secrets User
-- Assign access to: User
-- Select your own name from the list
-- Click Review + assign
----
-
-### 🔹 Step 5: Create KQL Analytics Rule in Microsoft Sentinel
+### 🔹 Step 4: Create KQL Analytics Rule in Microsoft Sentinel
 
 #### **Goal:**  
 Detect a spike in secret retrieval by a single user.
@@ -183,7 +167,7 @@ Detect a spike in secret retrieval by a single user.
 
 ---
 
-### 🔹 Step 6: Create a Logic App Playbook for Automated Response
+### 🔹 Step 5: Create a Logic App Playbook for Automated Response
 
 **Goal:** Automate containment or response actions when a Sentinel incident is triggered.
 
@@ -211,7 +195,7 @@ Detect a spike in secret retrieval by a single user.
 
 ---
 
-### 🔹 Step 7: Connect the Playbook to the Alert Rule
+### 🔹 Step 6: Connect the Playbook to the Alert Rule
 
 **Goal:** Link the playbook to run automatically when the detection rule fires.
 
@@ -221,6 +205,17 @@ Detect a spike in secret retrieval by a single user.
 4. Under **Trigger playbook on alert**, select your newly created Logic App.
 5. Click **Apply**, then **Save** the rule.
 
+---
+### 🔹 Step 7: Simulate Abnormal Secret Access
+
+**Goal:** Trigger a brute-force–like pattern to mimic insider misuse
+
+```bash
+for i in {1..10}
+do
+  az keyvault secret show --vault-name DemoVault --name testsecret
+done
+```
 ---
 
 ## ✅ Success Criteria

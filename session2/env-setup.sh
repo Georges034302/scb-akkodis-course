@@ -19,4 +19,10 @@ az keyvault create \
   --resource-group "$RG" \
   --location "$LOCATION"
 
+echo "🔐 Adding a test secret to the Key Vault..."
+az keyvault secret set \
+  --vault-name "$KV_NAME" \
+  --name testsecret \
+  --value "demo-value"
+
 echo "✅ Environment setup complete! Key Vault: $KV_NAME"
