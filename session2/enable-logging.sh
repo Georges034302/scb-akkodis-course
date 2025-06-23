@@ -24,6 +24,12 @@ echo "🔑 Fetching Key Vault name in $RG..."
 KV_NAME=$(az keyvault list --resource-group "$RG" --query "[0].name" -o tsv)
 echo "Key Vault Name: $KV_NAME"
 
+echo "🔐 Adding a test secret to the Key Vault..."
+az keyvault secret set \
+  --vault-name "$KV_NAME" \
+  --name testsecret \
+  --value "demo-value"
+
 echo "📊 Enabling diagnostic logging for Key Vault: $KV_NAME..."
 az monitor diagnostic-settings create \
   --resource "$KV_NAME" \

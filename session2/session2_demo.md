@@ -21,25 +21,25 @@
 **Goal:** Deploy a controlled lab environment
 
 ```bash
+# 🔹 Set resource group and location variables
 RG="demo-rg"
 LOCATION="australiaeast"
+
+# 🔹 Create a new resource group
 az group create \
   --name "$RG" \
   --location "$LOCATION"
 
+# 🔹 Register the Key Vault resource provider (if not already registered)
 az provider register \
   --namespace Microsoft.KeyVault
 
+# 🔹 Generate a unique Key Vault name and create the Key Vault
 KV_NAME="DemoVault$(date +%s)"
 az keyvault create \
-  --name $KV_NAME \
+  --name "$KV_NAME" \
   --resource-group "$RG" \
   --location "$LOCATION"
-
-az keyvault secret set \
-  --vault-name "$KV_NAME" \
-  --name testsecret \
-  --value "demo-value"
 ```
 
 ---
@@ -68,24 +68,33 @@ az keyvault secret set \
 
 1. Ensure you have a Log Analytics Workspace connected to Sentinel
    
+
 ```bash
+# 🔹 Create Log Analytics Workspace for Sentinel
 az monitor log-analytics workspace create \
   --resource-group Demo-RG \
   --workspace-name log-demoworkspace \
   --location australiaeast
-```
 
-2. Enable diagnostic logging:
-
-```bash
+# 🔹 Get Log Analytics Workspace ID
 WORKSPACE_ID=$(az monitor log-analytics workspace show \
   --resource-group Demo-RG \
   --workspace-name log-demoworkspace \
   --query id -o tsv)
 
+# 🔹 Get Subscription ID
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+# 🔹 Get Key Vault Name in Resource Group
 KV_NAME=$(az keyvault list --resource-group Demo-RG --query "[0].name" -o tsv)
 
+# 🔹 Add a Test Secret to the Key Vault
+az keyvault secret set \
+  --vault-name "$KV_NAME" \
+  --name testsecret \
+  --value "demo-value"
+
+# 🔹 Enable Diagnostic Logging for Key Vault to Sentinel
 az monitor diagnostic-settings create \
   --resource "$KV_NAME" \
   --resource-group Demo-RG \
