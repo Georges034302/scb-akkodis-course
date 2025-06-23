@@ -116,12 +116,11 @@ Detect a spike in secret retrieval by a single user.
 
 #### **A. Enable Microsoft Sentinel on Your Workspace**
 
-1. Go to the [Azure Portal](https://portal.azure.com).
-2. In the top search bar, type **Microsoft Sentinel** and open it.
-3. Click **➕ Add**.
-4. In the **Subscription** dropdown, select the subscription where your Log Analytics workspace was created.
-5. In the **Workspace** dropdown, select your workspace (e.g., `log-demoworkspace` in the `Demo-RG` resource group).
-6. Click **Add Microsoft Sentinel** to enable it on your workspace.
+1. In the **Microsoft Sentinel** and **Overview**
+2. Find the **Analytics** view and select **Manage analytics rules**
+3. Click **➕ Create**.
+4. Select the lab workspace (e.g., `log-demoworkspace` in the `Demo-RG` resource group).
+6. Click **➕ Add** to enable **Microsoft Sentinel** on your workspace.
 
 ---
 
@@ -134,45 +133,52 @@ Detect a spike in secret retrieval by a single user.
 **General Tab:**
 - **Rule Name:** Excessive Secret Access Attempt
 - **Description:** Detects more than 5 secret access attempts by a single user within a 5-minute window.
+- **Severity:** Medium
+- **MITRE ATT&CK:** Seach and Select `Credential Access` then Seach and Select `T1552 – Unsecured Credentials`
+- Ensure **Status** is Enabled
 
 **Set Rule Logic Tab:**
+* **Rule query:**
 - Paste the following KQL query into the rule logic section:
   ```kusto
-  AuditLogs
-  | where ActivityDisplayName == "Get Secret"
-  | extend UPN = tostring(InitiatedBy.user.userPrincipalName)
+  AzureDiagnostics
+  | where OperationName == "SecretGet"
+  | extend UPN = tostring(identity_claim_unique_name_s)
   | summarize AccessCount = count() by UPN, bin(TimeGenerated, 5m)
   | where AccessCount > 5
   ```
-- **View query results:** Click *View query results* to validate the output (optional but recommended).
+- **View query results:** Click *View query results* to validate the output (optional but recommended)
+
+* **Alert Enhancement:** 
+- **Entity Mapping:** Search and Select **Account** then Select `PUID` and `UPN` identifiers
+- **Custom Details:** ➕ Add: 
+
+      | **Custom Detail Key**   | **Mapped KQL Column** |
+      |-------------------------|-----------------------|
+      | `UserPrincipalName`     | `UPN`                 |
+      | `AccessCount`          | `AccessCount`          |
+
+- **Alert Details:** 
+    - **Alert Name Format:** Excessive Key Vault Access by {{UPN}}
+    - **Alert Description Format:** User {{UPN}} accessed secrets {{AccessCount}} times in a 5-minute window.
 - **Query scheduling:** Every 5 minutes
 - **Lookup data from the last:** 5 minutes
-- **Start running:** Choose a future start time or leave default (e.g., 17/06/2025, 12:00 PM)
-- **Alert threshold:** Leave at 0 (generate an alert for any result returned)
-- **Event grouping:** Optional — group all results into a single alert or group by UPN
-- **Suppression:** Leave unchecked unless you want to prevent multiple alerts for the same behavior within a suppression window
+- **Start running:** Automatically
+- **Alert threshold:** Leave at 0 (is greater than)
+- **Event grouping:** Group all events into a single alert 
+- **Suppression:** Leave unchecked unless you want to prevent multiple alerts
 
-**Entity Mapping Tab:**
-- **Map User → UPN**
+**Incident settings Tab:** Leave everything to default setup
 
-**Custom Details Tab:**
-- (Optional) Add custom fields from the query you wish to expose in alerts.
-
-**Actions Tab (Optional):**
-- Add a playbook (Logic App) if you wish to automate the response (e.g., disable the user or send a Teams alert).
+**Automated response Tab:** GO TO `Step 5`
+** Review + Create**
+- 
 
 ---
 
 4. Click **Review + create**, then **Create** to finalize the rule.
 
 ---
-
-> **Azure Best Practice:**  
-> - Always use Azure Portal or Azure CLI for configuring Sentinel and analytics rules.
-> - Use clear, descriptive rule names and document your detection logic.
-> - Schedule queries at intervals that balance detection speed and resource usage.
-> - Map entities for better incident investigation and automation.
-> - Use playbooks for automated response to high-risk incidents.
 
 ---
 
@@ -181,11 +187,31 @@ Detect a spike in secret retrieval by a single user.
 **Goal:** Automate containment or response actions when a Sentinel incident is triggered.
 
 1. Navigate to **Microsoft Sentinel > Automation**.
-2. Click the **Playbooks** tab.
-3. Click **➕ Add > Add new playbook (Consumption)**.
-4. Enter the name, subscription, resource group, and region, then click **Create**.
-5. Once the Logic App designer opens, select the trigger:  
-   - **When a response to an Azure Sentinel alert is triggered**
+2. Click the **➕ Create** 
+3. Select **Playbook with incident trigger**
+    - Select the subscription and resource group
+    - **Playbook name:** DisableUserOnKVAlert
+    - **Enable diagonistics logs in Log Analytics:** ensure it is enabled
+4. Go to: **Logic Apps**
+    - In the Development tools (left panel) > **Logic app templates**
+    - Select **Add Triger**
+    - Seach for: `Azure Sentinel` and select the type: `When a response to an Azure Sentinel alert is triggered`
+    - Add Description: When a response to an Azure Sentinel alert is triggered
+    - Clicl **Save**
+5. Once the Logic App trigger is configured, go back to **Analytics rule wizard** > **Automation response tab**
+    - **➕ Add new**
+    - **Automation rule name:** Run Playbook on Excessive Access
+    - **Trigger:** When incident is created
+    - **Actions:**
+        - Select: `Run playbook`
+        - Select: `DisableUserOnKVAlert`
+        - Select: `Manage Permissions' and update the permissions at Resource Group level
+    - **Apply**
+---
+
+### 🔹 Step 6: Connect the Playbook to the Alert Rule
+
+**Goal:** Link the playbook to run automatically when the detection rule fires.
 
 **✅ Add the Following Actions (inside the Logic App):**
 - **Condition:**  
@@ -201,12 +227,6 @@ Detect a spike in secret retrieval by a single user.
     - Azure Storage Account, or
     - Log Analytics (e.g., `CustomLogs_SentinelPlaybooks_CL`)
 - **Save and publish** the Logic App.
-
----
-
-### 🔹 Step 6: Connect the Playbook to the Alert Rule
-
-**Goal:** Link the playbook to run automatically when the detection rule fires.
 
 1. Go to **Microsoft Sentinel > Analytics**.
 2. Open the Analytics Rule you created earlier (e.g., **Excessive Secret Access Attempt**).
