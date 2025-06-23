@@ -10,15 +10,13 @@
 - Microsoft Teams integration and Graph API permissions (optional for advanced response)
 
 ---
-
 ## 📉 Step-by-Step Lab Instructions
 - Use Azure Cloud Shell - Azure CLI: 👉 https://shell.azure.com
-
 ---
 
 ### 🔹 Step 1: Create a Resource Group and Key Vault
-
 **Goal:** Deploy a controlled lab environment
+---
 
 ```bash
 # 🔹 Set resource group and location variables
@@ -43,10 +41,9 @@ az keyvault create \
 ```
 
 ---
-
 ### 🔹 Step 2: Assign a Privileged Role 
-
 **Goal:** Assign **Key Vault Contributor** role on the vault (using Portal):
+---
 
   - Go to the Azure Portal: [https://portal.azure.com](https://portal.azure.com)
   - Navigate to **Resource Groups** > **Demo-RG**
@@ -60,11 +57,9 @@ az keyvault create \
   - Click Review + assign
 ---
 
----
-
 ### 🔹 Step 3: Enable Diagnostic Settings on the Key Vault
-
 **Goal:** Forward logs to Sentinel for analytics
+---
 
 1. Ensure you have a Log Analytics Workspace connected to Sentinel
    
@@ -106,12 +101,8 @@ az monitor diagnostic-settings create \
 ```
 
 ---
-
 ### 🔹 Step 4: Create KQL Analytics Rule in Microsoft Sentinel
-
-#### **Goal:**  
-Detect a spike in secret retrieval by a single user.
-
+#### **Goal:** Detect a spike in secret retrieval by a single user.
 ---
 
 #### **A. Enable Microsoft Sentinel on Your Workspace**
@@ -122,7 +113,6 @@ Detect a spike in secret retrieval by a single user.
 4. Select the lab workspace (e.g., `log-demoworkspace` in the `Demo-RG` resource group).
 6. Click **➕ Add** to enable **Microsoft Sentinel** on your workspace.
 
----
 
 #### **B. Create Analytics Rule to Detect Excessive Secret Access Attempts**
 
@@ -171,20 +161,13 @@ Detect a spike in secret retrieval by a single user.
 **Incident settings Tab:** Leave everything to default setup
 
 **Automated response Tab:** GO TO `Step 5`
-** Review + Create**
-- 
+
+Click **Review + create**, then **Create** to finalize the rule.
 
 ---
-
-4. Click **Review + create**, then **Create** to finalize the rule.
-
----
-
----
-
 ### 🔹 Step 5: Create a Logic App Playbook for Automated Response
-
-**Goal:** Automate containment or response actions when a Sentinel incident is triggered.
+#### **Goal:** Automate containment or response actions when a Sentinel incident is triggered.
+---
 
 1. Navigate to **Microsoft Sentinel > Automation**.
 2. Click the **➕ Create** 
@@ -209,35 +192,9 @@ Detect a spike in secret retrieval by a single user.
     - **Apply**
 ---
 
-### 🔹 Step 6: Connect the Playbook to the Alert Rule
-
-**Goal:** Link the playbook to run automatically when the detection rule fires.
-
-**✅ Add the Following Actions (inside the Logic App):**
-- **Condition:**  
-  - Check if `UserPrincipalName` (from the incident entities) belongs to a privileged Azure AD group (via Graph API or Azure AD connector).
-- **Disable User Account (optional):**  
-  - Use Microsoft Graph API or Azure AD connector to disable the user.
-- **Send Notification:**  
-  - Send a message to Microsoft Teams, Email, or both — include Incident Name, Severity, Entities, and TimeGenerated.
-- **Create ITSM Ticket (optional):**  
-  - Use ServiceNow, Jira, or built-in Logic App connectors to log a ticket.
-- **Log Action:**  
-  - Write incident metadata and playbook action results to:
-    - Azure Storage Account, or
-    - Log Analytics (e.g., `CustomLogs_SentinelPlaybooks_CL`)
-- **Save and publish** the Logic App.
-
-1. Go to **Microsoft Sentinel > Analytics**.
-2. Open the Analytics Rule you created earlier (e.g., **Excessive Secret Access Attempt**).
-3. Go to the **Automated response** tab.
-4. Under **Trigger playbook on alert**, select your newly created Logic App.
-5. Click **Apply**, then **Save** the rule.
-
----
 ### 🔹 Step 7: Simulate Abnormal Secret Access
-
-**Goal:** Trigger a brute-force–like pattern to mimic insider misuse
+#### **Goal:** Trigger a brute-force–like pattern to mimic insider misuse
+---
 
 ```bash
 for i in {1..10}
@@ -245,6 +202,45 @@ do
   az keyvault secret show --vault-name DemoVault --name testsecret
 done
 ```
+- ** Wait 5 minutes **
+- ** Navigate to **Microsoft Sentinel** and Review the **Incidents** chart (incidents will appear after 5 minutes)
+- ** Navigate to **Log Analytics** in Azure Portal
+  - Copy and Paste the `AzureDiagnostics` Kusto Query
+  - Run the query and review the logs.
+---
+
+### 🔹 (Optional) Step 6: Add Email Notification to the Logic App
+#### **Goal:**  Enable notifications using Logic App
+---
+1. Go to Azure Portal > Logic Apps
+2. Open your Logic App: **DisableUserOnKVAlert**
+3. Under **Development Tools**, click **Logic App Designer**
+4. Inside the trigger block, you should already see:  
+   *When a response to a Microsoft Sentinel incident is triggered*
+5. Click **+ New Step**
+6. Search for **Outlook 365** or **Office 365 Outlook** (based on your connector)
+7. Select **Send an email (V2)**
+8. Fill in the email fields:
+
+   | Field   | Value                                                      |
+   |---------|------------------------------------------------------------|
+   | To      | your-soc-team@yourdomain.com                               |
+   | Subject | 🔐 Sentinel Alert: {{IncidentName}} - Severity {{Severity}}|
+   | Body    | Use dynamic fields:<br>Alert: {{IncidentName}}<br>Time: {{StartTimeUtc}}<br>User: {{UserPrincipalName}}<br>Description: {{Description}}<br>Check Sentinel for full details. |
+
+   🛠 If you used UPN in the query, use `@{triggerBody()?['Entities']?[0]?['UPN']}` in advanced expressions.
+
+9. Click **Save** in the Logic App toolbar.
+
+
+#### 🔔 Now What Happens?
+
+When the "Excessive Secret Access" rule fires, Sentinel triggers your Logic App.
+
+Your Logic App:
+- Parses the incident entity.
+- Sends an email to your SOC team with dynamic incident data.
+
 ---
 
 ## ✅ Success Criteria
