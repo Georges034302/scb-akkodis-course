@@ -15,9 +15,12 @@ az network watcher configure \
   --enabled true
 
 echo "🚀 Deploying bicep template..."
+echo "🔑 Please enter the VM admin password:"
+read -s -p "🔒 Password: " PASSWORD
+echo
 az deployment group create \
   --resource-group rg-flow-lab \
   --template-file nsg_flow.bicep \
-  --parameters adminPassword='YourSecureP@ssword123'
+  --parameters adminPassword="$PASSWORD" \
 
 echo "✅ Deployment complete!"

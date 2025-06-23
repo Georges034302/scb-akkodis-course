@@ -9,7 +9,6 @@ SUBNET_WEB="web-subnet"
 SUBNET_APP="app-subnet"
 NSG="nsg-app"
 USERNAME="azureuser"
-PASSWORD="YourSecureP@ssword123"
 VM_WEB="vm-web"
 VM_APP="vm-app"
 PIP_WEB="vm-web-pip"
@@ -81,6 +80,9 @@ az network nic create \
   --vnet-name $VNET \
   --subnet $SUBNET_APP
 
+echo "🔑 Please enter the VM admin password:"
+read -s -p "🔒 Password: " PASSWORD
+echo
 echo "💻 Creating web VM (Ubuntu 18.04-LTS)..."
 az vm create \
   --resource-group $RG \

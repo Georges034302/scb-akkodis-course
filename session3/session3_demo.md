@@ -9,7 +9,7 @@
 
 ---
 
-## 🧭 Step-by-Step Lab Instructions
+## 🗭 Step-by-Step Lab Instructions
 
 ---
 
@@ -19,7 +19,7 @@
 
 ---
 
-#### 🧱 Option A: Create Resource group and deploy the Bicep file `nsg_flow.bicep`
+#### 🛡️ Option A: Create Resource group and deploy the Bicep file `nsg_flow.bicep`
 
 ```bash
 az group create \
@@ -45,11 +45,32 @@ az deployment group create \
 cd session3
 bash nsg_flow.sh
 ```
+
 ---
 
-### 🔍 Step 2: Post-Deployment Testing
+### 📦 Step 3: Enable Flow Logs in Network Watcher (Manual)
 
-#### 1️⃣ Get Private IP of vm-app
+- Open **Azure Portal** and search for **Network Watcher**
+- In the left panel, select **Logs > Flow Logs**
+- Click **➕ Create**
+  - **Basics Tab:**
+    - Flow log type: `Network security group`
+    - Select NSG: `nsg-app` and confirm
+    - Location: `australiaeast`
+    - Create or select a **Storage Account** for logs
+    - Set retention (e.g., 30 days)
+  - **Analytics Tab:**
+    - Flow logs version: `Version 2`
+    - Enable **Traffic Analytics**
+      - Set interval: `10 minutes`
+      - Select Log Analytics workspace: `flowlog-law`
+  - Review and Create
+
+---
+
+### 🔍 Step 4: Post-Deployment Testing
+
+#### Get Private IP of vm-app
 
 ```bash
 az vm show \
@@ -59,83 +80,89 @@ az vm show \
   --query privateIps -o tsv
 ```
 
-#### 2️⃣ SSH into vm-web
-
-```bash
-az vm ssh --name vm-web --resource-group rg-flow-lab
-```
-
-#### 3️⃣ Attempt SSH to vm-app (Expected to Fail)
+#### SSH into vm-web (Expected to Fail)
 
 ```bash
 ssh azureuser@<vm-app-private-ip>
 ```
 
-You should see a timeout or connection denied — verifying NSG is blocking the traffic.
+⏳ You should see a timeout or connection denied — verifying NSG is blocking the traffic.
 
 ---
 
-### 📦 Step 3: Enable Flow Logs in Network Watcher (Manual or Scripted)
+### 📂 Step 4: Inspect Flow Logs (Portal or CLI)
 
-- Open Azure Portal > Network Watcher > NSG Flow Logs
-- Select NSG `nsg-app`
-- Enable logging
-  - Destination: Create or select a Storage Account
-  - Link to Log Analytics workspace: `flowlog-law`
-- (Optional) Enable **Traffic Analytics** with 10-minute interval
+#### 🔢 Option A: Using Azure Portal
+
+1. Go to **Storage accounts** > your account (e.g., `flsay...`) > **Containers**
+2. Open `insights-logs-networksecuritygroupflowevent`
+3. Navigate into the folder structure: `year/month/day/hour`
+4. Open a JSON log blob and inspect entries like:
+   ```
+   "10.100.1.4,10.100.2.5,57232,22,T,I,D,U,..."
+   ```
+   - `D` = Denied, `T` = TCP, `22` = SSH
+
+#### 🔢 Option B: Using CLI
+
+```bash
+az storage blob list \
+  --account-name flsay3lw6cr4y4mwq \
+  --container-name insights-logs-networksecuritygroupflowevent \
+  --output table
+```
+
+(Optional) To download and inspect a specific log:
+
+```bash
+az storage blob download \
+  --account-name flsay3lw6cr4y4mwq \
+  --container-name insights-logs-networksecuritygroupflowevent \
+  --name <blob-path> \
+  --file ./flowlog.json
+```
+
+Then open `flowlog.json` locally to examine flow tuples.
 
 ---
 
-### 📂 Step 4: Inspect Flow Logs (Optional)
-
-Navigate to the Storage Account container or use Traffic Analytics to:
-- Review JSON logs showing `deny` actions
-- Confirm the flow from `vm-web (10.100.1.x)` to `vm-app (10.100.2.x:22)` was blocked
-
----
-
-### 🧪 Step 5: Analyze Flow Logs with KQL in Log Analytics (Optional)
+### 🥪 Step 5: Analyze Flow Logs with KQL in Log Analytics (Optional)
 
 **Goal:** Validate denied SSH traffic is visible in flow logs via KQL.
 
-> ⚠️ Prerequisites:
-> - Flow logs must be enabled and connected to a Log Analytics Workspace (`flowlog-law`)
-> - Traffic Analytics is enabled in your Bicep or CLI deployment
+> Prerequisites:
+>
+> - Flow logs must be linked to `flowlog-law`
+> - Traffic Analytics enabled
 
-#### 1️⃣ Open Log Analytics:
+#### 1. Open Log Analytics:
+
 - Go to **Log Analytics Workspaces** in Azure Portal
-- Open the workspace `flowlog-law`
-- Select **Logs** (KQL query window)
+- Select `flowlog-law` > **Logs**
 
-#### 2️⃣ Run the KQL Query:
+#### 2. Run KQL:
+
 ```kql
-AzureNetworkAnalytics_CL
-| where FlowType_s == "Blocked" and L4Protocol_s == "TCP" and Dport_s == "22"
-| where Direction_s == "I" and SubType_s == "FlowLog"
-| project TimeGenerated, SrcIP_s, DstIP_s, Dport_s, L4Protocol_s, FlowType_s, VM_s
+AzureDiagnostics
+| where Category == "NetworkSecurityGroupEvent"
+| project TimeGenerated, type_s, direction_s, primaryIPv4Address_s, ruleName_s
 | order by TimeGenerated desc
 ```
 
-#### ✅ Expected Output:
-A table showing denied SSH traffic from vm-web to vm-app:
+#### ✅ Expected:
 
-| TimeGenerated       | SrcIP_s       | DstIP_s       | Dport_s | FlowType_s | VM_s    |
-|---------------------|---------------|---------------|---------|------------|---------|
-| 2025-06-19 12:02:10 | 10.100.1.4    | 10.100.2.5    | 22      | Blocked    | vm-web  |
-
----
-
-🎯 You have now:
-- Deployed infrastructure using Bicep and CLI
-- Tested denied traffic flow
-- Verified NSG enforcement
-- Enabled and reviewed Flow Logs
-- Analyzed logs with KQL in Log Analytics
-
-✅ **Lab Complete**
+| TimeGenerated       | SrcIP\_s   | DstIP\_s   | Dport\_s | FlowType\_s | VM\_s  |
+| ------------------- | ---------- | ---------- | -------- | ----------- | ------ |
+| 2025-06-19 12:02:10 | 10.100.1.4 | 10.100.2.5 | 22       | Blocked     | vm-web |
 
 ---
 
+🌟 You have now:
 
+- Deployed infrastructure using Bicep/CLI
+- Triggered and tested NSG blocking
+- Enabled and explored Flow Logs
+- Analyzed results using Traffic Analytics and KQL
 
+📅 **Lab Complete**
 
