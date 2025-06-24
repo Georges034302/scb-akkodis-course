@@ -9,6 +9,7 @@ CONTAINER_NAME="audit-logs"
 STORAGE_NAME="auditstore$(date +%s)"
 
 # Save for reuse
+echo "export RG_NAME=$RG_NAME" >> .env
 echo "export STORAGE_NAME=$STORAGE_NAME" > .env
 echo "export CONTAINER_NAME=$CONTAINER_NAME" >> .env
 
@@ -50,4 +51,4 @@ az storage container create \
   --auth-mode login \
   --output none
 
-echo "✅ Done. Now run: source .env && ./immutable-storage.sh"
+echo "✅ Done. Now run: bash immutable-storage.sh"

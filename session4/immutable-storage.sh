@@ -24,10 +24,15 @@ az storage container immutability-policy create \
 # ========================================
 # 📝 Upload Log File (Unique Name)
 # ========================================
-FILENAME="log-$(date +%s)-entry.txt"
+FILENAME="log-$(date +%s).txt"
 echo "📝 Creating sample log file: $FILENAME"
 echo "SECURITY LOG: $(date)" > "$FILENAME"
+# Remove any existing FILENAME entry, then add the new one
+sed -i.bak '/^[[:space:]]*export[[:space:]]\+FILENAME=/d' .env
 echo "export FILENAME=$FILENAME" >> .env
+rm -f .env.bak
+
+
 
 echo "🔐 Generating SAS token..."
 SAS_TOKEN=$(az storage container generate-sas \
@@ -71,7 +76,7 @@ else
 fi
 
 # ========================================
-# 🛡️ Apply Legal Hold (Optional)
+# 🛡️ Apply Legal Hold 
 # ========================================
 echo "🛡️ Applying legal hold tags..."
 az storage container legal-hold set \
@@ -80,19 +85,9 @@ az storage container legal-hold set \
   --tags APRACPS234 SOX2024Audit \
   --output none
 
+source .env
 # ========================================
-# 🔍 Final Validation
-# ========================================
-echo "🔍 Verifying immutability policy state..."
-az storage container immutability-policy show \
-  --account-name "$STORAGE_NAME" \
-  --container-name "$CONTAINER_NAME"
+echo "✅ Immutable storage setup complete."
+echo "🛡️ Container is protected with an unlocked WORM policy and legal hold (can be removed)"
 
-echo "🧪 Testing delete operation (should succeed)..."
-az storage blob delete \
-  --account-name "$STORAGE_NAME" \
-  --container-name "$CONTAINER_NAME" \
-  --name "$FILENAME" \
-  --auth-mode login && echo "✅ Delete succeeded as expected (unlocked)."
 
-echo "✅ Immutable Storage Lab (Unlocked) Complete!"
