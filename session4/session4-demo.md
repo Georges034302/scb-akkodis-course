@@ -41,8 +41,6 @@ Design includes:
 az login --use-device-code
 ```
 
----
-
 ### 🔹 Step 2: Create Resource Group
 
 ```bash
@@ -50,8 +48,6 @@ az group create \
   --name rg-immutable-demo \
   --location australiaeast
 ```
-
----
 
 ### 🔹 Step 3: Create Storage Account
 
@@ -67,8 +63,6 @@ az storage account create \
   --min-tls-version TLS1_2
 ```
 
----
-
 ### 🔹 Step 4: Create Container
 
 ```bash
@@ -77,8 +71,6 @@ az storage container create \
   --account-name "$STORAGE_NAME" \
   --auth-mode login
 ```
-
----
 
 ### 🔹 Step 5: Set Immutable Policy (Unlocked)
 
@@ -90,8 +82,6 @@ az storage container immutability-policy set \
   --allow-protected-append-writes true \
   --auth-mode login
 ```
-
----
 
 ### 🔹 Step 6: Upload Sample Log File
 
@@ -112,8 +102,6 @@ az storage container generate-sas \
 azcopy copy "log1.txt" "https://$STORAGE_NAME.blob.core.windows.net/audit-logs/log1.txt?<SAS_TOKEN>" --overwrite=false
 ```
 
----
-
 ### 🔹 Step 7: Lock Immutability Policy
 
 ```bash
@@ -122,8 +110,6 @@ az storage container immutability-policy lock \
   --container-name audit-logs \
   --if-match "*"
 ```
-
----
 
 ### 🔹 Step 8: Apply Legal Hold (Optional)
 
@@ -138,76 +124,105 @@ az storage container legal-hold set \
 
 ## ✅ Post-Deployment Validation
 
-### 🔹 Attempt to Delete Blob (Expect Failure)
+### ✅ What Should Exist Post-Script
 
-```bash
-az storage blob delete \
-  --account-name "$STORAGE_NAME" \
-  --container-name audit-logs \
-  --name log1.txt \
-  --auth-mode login
-```
-
-Expected: Failure due to locked WORM policy.
+| Resource         | Configuration                                       |
+| ---------------- | --------------------------------------------------- |
+| Storage Account  | Geo-redundant (GRS), TLS 1.2+, StorageV2            |
+| Blob Container   | Named `audit-logs`, private, with WORM policy       |
+| Immutable Policy | Locked, 2555 days, append-only writes enabled       |
+| Legal Hold       | Applied with tags (e.g., `APRA-CPS234`)             |
+| Blob Uploaded    | `log1.txt` successfully uploaded using SAS & AzCopy |
 
 ---
 
-### 🔹 Check Immutability Policy
+### 🔍 Post-Script Test Scenarios
+
+#### 🔹 1. Check Immutability Lock Status
 
 ```bash
 az storage container show \
   --account-name "$STORAGE_NAME" \
-  --name audit-logs \
+  --name "$CONTAINER_NAME" \
   --query "immutabilityPolicy"
 ```
 
+**Expected Output:**
+
+```json
+{
+  "immutabilityPeriodSinceCreationInDays": 2555,
+  "allowProtectedAppendWrites": true,
+  "state": "Locked"
+}
+```
+
+#### 🔹 2. Attempt to Delete the Blob
+
+```bash
+az storage blob delete \
+  --account-name "$STORAGE_NAME" \
+  --container-name "$CONTAINER_NAME" \
+  --name log1.txt \
+  --auth-mode login
+```
+
+**Expected Behavior:** ❌ Operation fails\
+**Error Message:**
+
+```
+This operation is not permitted as the blob is under a locked immutability policy.
+```
+
+#### 🔹 3. Try Overwriting the Blob
+
+```bash
+echo "MODIFIED CONTENT" > log1.txt
+azcopy copy "log1.txt" \
+  "https://$STORAGE_NAME.blob.core.windows.net/$CONTAINER_NAME/log1.txt?$SAS_TOKEN" \
+  --overwrite=true
+```
+
+**Expected Behavior:** ❌ Upload fails — Blob cannot be overwritten under WORM lock
+
+#### 🔹 4. Test Legal Hold View
+
+```bash
+az storage container legal-hold show \
+  --account-name "$STORAGE_NAME" \
+  --container-name "$CONTAINER_NAME"
+```
+
+**Expected Output:**
+
+```json
+{
+  "hasLegalHold": true,
+  "tags": [
+    "APRA-CPS234",
+    "SOX-2024-Audit"
+  ]
+}
+```
+
+#### 🧪 5. (Optional) Try Appending New File
+
+```bash
+echo "APPENDED LOG ENTRY: $(date)" > log2.txt
+azcopy copy "log2.txt" \
+  "https://$STORAGE_NAME.blob.core.windows.net/$CONTAINER_NAME/log2.txt?$SAS_TOKEN" \
+  --overwrite=false
+```
+
+**Expected Behavior:** ✅ Upload succeeds — Append-only behavior is allowed
+
 ---
 
-## 🌍 Portal Instructions
+## 🧼 Want Cleanup?
 
-1. Navigate to the [Azure Portal](https://portal.azure.com) and select **Resource groups** > **+ Create**.
-
-   - Resource group name: `rg-immutable-demo`
-   - Region: `Australia East`
-
-2. In the Portal search bar, go to **Storage accounts** > **+ Create**.
-
-   - Name: `auditstoreXXXX`
-   - Region: `Australia East`
-   - Performance: Standard
-   - Redundancy: GRS
-   - Advanced: Minimum TLS version: 1.2 or higher
-   - Click **Review + Create** > **Create**
-
-3. After deployment, go to the storage account > **Containers** > **+ Container**
-
-   - Name: `audit-logs`
-   - Public access level: **Private (no anonymous access)**
-   - Click **Create**
-
-4. Select the container > Go to **Access policy** tab
-
-   - Click **+ Add policy**
-   - Enable **Time-based retention policy**
-   - Enter **Retention period**: `2555` days
-   - Check **Allow protected append writes**
-   - Leave policy mode as **Unlocked** and click **Add**
-
-5. Once verified, click the **Lock** icon in the Immutability Policy panel to permanently enforce the policy
-
-6. (Optional) Go to **Legal hold** tab > Click **+ Add**
-
-   - Tags: `APRA-CPS234`, `SOX-2024-Audit`
-   - Click **Add** to apply legal hold
+```bash
+az group delete --name "$RG_NAME" --yes --no-wait
+```
 
 ---
-
-## 📈 Final Validation Summary
-
-| Validation Step               | Method                                 |
-| ----------------------------- | -------------------------------------- |
-| Container is Immutable        | `az storage container show`            |
-| Blob Deletion is Blocked      | `az storage blob delete` fails         |
-| Append Writes Allowed         | `azcopy` succeeds                      |
-| Legal Hold Visible (Optional) | `az storage container legal-hold show` |
 
