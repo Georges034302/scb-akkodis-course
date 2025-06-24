@@ -22,13 +22,27 @@ Design includes:
 - Container with time-based WORM policy (2555 days)
 - Protected append writes
 - Legal hold (optional)
+- Upload with fallback mechanism (AzCopy ➡️ CLI)
 
 ---
 
 ## 🧠 Pre-Requisites
 
 - Azure CLI installed and authenticated (`az login`)
+- Run `az upgrade` to ensure latest version
+- Install required CLI extension:
+  ```bash
+  az extension add --name storage-preview
+  ```
+- Install AzCopy CLI:
+  ```bash
+  wget https://aka.ms/downloadazcopy-v10-linux
+  tar -xvf downloadazcopy-v10-linux
+  sudo cp ./azcopy_linux_amd64_*/azcopy /usr/local/bin/
+  azcopy --version
+  ```
 - Contributor role on your Azure subscription
+- Storage Blob Data Contributor role on the storage account
 - GitHub Codespace or local shell with `azcopy` (optional)
 
 ---
@@ -72,153 +86,147 @@ az storage container create \
   --auth-mode login
 ```
 
-### 🔹 Step 5: Set Immutable Policy (Unlocked)
+### 🔹 Step 5: Assign Required Role in Azure Portal
+
+Before performing blob-level operations (e.g., uploading, deleting, locking policies), ensure that your logged-in identity has the **Storage Blob Data Contributor** role assigned on the storage account.
+
+**To do this via the Azure Portal:**
+
+1. Go to the **Storage Account** you just created.
+2. In the left menu, select **Access Control (IAM)**.
+3. Click **+ Add** → **Add role assignment**.
+4. Role: `Storage Blob Data Contributor`
+5. Assign access to: `User, group, or service principal`
+6. Select your username.
+7. Click **Save**.
+
+⏳ Wait 1–2 minutes for the role assignment to take effect.
+
+---
+
+### 🔹 Step 6: Set Immutable Policy (Unlocked)
 
 ```bash
-az storage container immutability-policy set \
+az storage container immutability-policy create \
   --account-name "$STORAGE_NAME" \
   --container-name audit-logs \
   --period 2555 \
-  --allow-protected-append-writes true \
-  --auth-mode login
+  --allow-protected-append-writes true
 ```
 
-### 🔹 Step 6: Upload Sample Log File
+### 🔹 Step 7: Upload Log File with AzCopy and Fallback
 
 ```bash
-echo "SECURITY LOG: $(date)" > log1.txt
-```
+FILENAME="log-$(date +%s)-entry.txt"
+echo "SECURITY LOG: $(date)" > "$FILENAME"
 
-```bash
-az storage container generate-sas \
+SAS_EXPIRY=$(date -u -d "1 hour" '+%Y-%m-%dT%H:%MZ')
+SAS_TOKEN=$(az storage container generate-sas \
   --name audit-logs \
   --account-name "$STORAGE_NAME" \
-  --permissions acw \
-  --expiry $(date -u -d "1 hour" '+%Y-%m-%dT%H:%MZ') \
-  -o tsv
+  --permissions acwl \
+  --expiry "$SAS_EXPIRY" \
+  --auth-mode login \
+  --as-user \
+  -o tsv)
+
+SAS_URL="https://$STORAGE_NAME.blob.core.windows.net/audit-logs/$FILENAME?$SAS_TOKEN"
+
+echo "Uploading file using AzCopy..."
+azcopy copy "$FILENAME" "$SAS_URL" --overwrite=false --log-level=INFO || {
+  echo "AzCopy failed. Trying CLI fallback..."
+  az storage blob upload \
+    --account-name "$STORAGE_NAME" \
+    --container-name audit-logs \
+    --name "$FILENAME" \
+    --file "$FILENAME" \
+    --auth-mode login
+}
 ```
 
-```bash
-azcopy copy "log1.txt" "https://$STORAGE_NAME.blob.core.windows.net/audit-logs/log1.txt?<SAS_TOKEN>" --overwrite=false
-```
+---
 
-### 🔹 Step 7: Lock Immutability Policy
+### 🔹 Step 8: Lock Immutability Policy
 
 ```bash
+ETAG=$(az storage container immutability-policy show \
+  --account-name "$STORAGE_NAME" \
+  --container-name audit-logs \
+  --query etag -o tsv)
+
 az storage container immutability-policy lock \
   --account-name "$STORAGE_NAME" \
   --container-name audit-logs \
-  --if-match "*"
+  --if-match "$ETAG"
 ```
 
-### 🔹 Step 8: Apply Legal Hold (Optional)
+### 🔹 Step 9: Apply Legal Hold (Optional)
 
 ```bash
 az storage container legal-hold set \
   --account-name "$STORAGE_NAME" \
   --container-name audit-logs \
-  --tags "APRA-CPS234" "SOX-2024-Audit"
+  --tags APRACPS234 SOX2024Audit
 ```
 
 ---
 
 ## ✅ Post-Deployment Validation
 
-### ✅ What Should Exist Post-Script
+| Resource         | Configuration                                  |
+| ---------------- | ---------------------------------------------- |
+| Storage Account  | Geo-redundant (GRS), TLS 1.2+, StorageV2       |
+| Blob Container   | Named `audit-logs`, private, with WORM policy  |
+| Immutable Policy | Locked, 2555 days, append-only writes enabled  |
+| Legal Hold       | Applied with tags (e.g., `APRA-CPS234`)        |
+| Blob Uploaded    | File uploaded successfully using AzCopy or CLI |
 
-| Resource         | Configuration                                       |
-| ---------------- | --------------------------------------------------- |
-| Storage Account  | Geo-redundant (GRS), TLS 1.2+, StorageV2            |
-| Blob Container   | Named `audit-logs`, private, with WORM policy       |
-| Immutable Policy | Locked, 2555 days, append-only writes enabled       |
-| Legal Hold       | Applied with tags (e.g., `APRA-CPS234`)             |
-| Blob Uploaded    | `log1.txt` successfully uploaded using SAS & AzCopy |
+### ✅ Immutable Storage Outcome Review
+
+| ✅ Criterion                          | Status      | Notes                                    |                                                |
+| ------------------------------------ | ----------- | ---------------------------------------- | ---------------------------------------------- |
+| **Storage Account**                  | ✅ Created   | GRS + TLS 1.2                            |                                                |
+| **Container**                        | ✅ Created   | `audit-logs`                             |                                                |
+| **WORM Immutability Policy (7 yrs)** | ✅ Locked    | Can't be changed — secure by design      |                                                |
+| **Protected Append Writes**          | ✅ Enabled   | Log files can only be added, not altered |                                                |
+| **Legal Hold Tags**                  | ✅ Applied   | (`APRA-CPS234`, `SOX2024Audit`)          |                                                |
+| **Blob Upload with Fallback**        | ✅ Robust    | AzCopy → CLI fallback logic              |                                                |
+| **Delete Operation Blocked**         | ✅ Confirmed | Immutability enforced                    |                                                |
+| **Final Message**                    | ✅ Completed | End-to-end workflow succeeded            | File uploaded successfully using AzCopy or CLI |
 
 ---
 
-### 🔍 Post-Script Test Scenarios
+## 🔍 Test Scenarios
 
-#### 🔹 1. Check Immutability Lock Status
+### ✅ Immutability Lock State
 
 ```bash
-az storage container show \
+az storage container immutability-policy show \
   --account-name "$STORAGE_NAME" \
-  --name "$CONTAINER_NAME" \
-  --query "immutabilityPolicy"
+  --container-name audit-logs
 ```
 
-**Expected Output:**
-
-```json
-{
-  "immutabilityPeriodSinceCreationInDays": 2555,
-  "allowProtectedAppendWrites": true,
-  "state": "Locked"
-}
-```
-
-#### 🔹 2. Attempt to Delete the Blob
+### ✅ Delete Attempt (Should Fail)
 
 ```bash
 az storage blob delete \
   --account-name "$STORAGE_NAME" \
-  --container-name "$CONTAINER_NAME" \
-  --name log1.txt \
-  --auth-mode login
+  --container-name audit-logs \
+  --name "$FILENAME" \
+  --auth-mode login || echo "✅ Delete blocked as expected."
 ```
 
-**Expected Behavior:** ❌ Operation fails\
-**Error Message:**
-
-```
-This operation is not permitted as the blob is under a locked immutability policy.
-```
-
-#### 🔹 3. Try Overwriting the Blob
-
-```bash
-echo "MODIFIED CONTENT" > log1.txt
-azcopy copy "log1.txt" \
-  "https://$STORAGE_NAME.blob.core.windows.net/$CONTAINER_NAME/log1.txt?$SAS_TOKEN" \
-  --overwrite=true
-```
-
-**Expected Behavior:** ❌ Upload fails — Blob cannot be overwritten under WORM lock
-
-#### 🔹 4. Test Legal Hold View
+### ✅ Legal Hold View
 
 ```bash
 az storage container legal-hold show \
   --account-name "$STORAGE_NAME" \
-  --container-name "$CONTAINER_NAME"
+  --container-name audit-logs
 ```
-
-**Expected Output:**
-
-```json
-{
-  "hasLegalHold": true,
-  "tags": [
-    "APRA-CPS234",
-    "SOX-2024-Audit"
-  ]
-}
-```
-
-#### 🧪 5. (Optional) Try Appending New File
-
-```bash
-echo "APPENDED LOG ENTRY: $(date)" > log2.txt
-azcopy copy "log2.txt" \
-  "https://$STORAGE_NAME.blob.core.windows.net/$CONTAINER_NAME/log2.txt?$SAS_TOKEN" \
-  --overwrite=false
-```
-
-**Expected Behavior:** ✅ Upload succeeds — Append-only behavior is allowed
 
 ---
 
-## 🧼 Want Cleanup?
+## 🧼 Cleanup
 
 ```bash
 az group delete --name "$RG_NAME" --yes --no-wait

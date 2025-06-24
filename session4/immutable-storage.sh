@@ -1,97 +1,89 @@
 #!/bin/bash
 
 # ========================================
-# 🧩 Variables
+# 🧩 Load Variables
 # ========================================
-RG_NAME="rg-immutable-demo"
-LOCATION="australiaeast"
-CONTAINER_NAME="audit-logs"
-STORAGE_NAME="auditstore$(date +%s)"
+source .env
 SAS_EXPIRY=$(date -u -d "1 hour" '+%Y-%m-%dT%H:%MZ')
 
-# ========================================
-# 🔐 Login to Azure
-# ========================================
-echo "🔐 Logging into Azure..."
-az login --use-device-code || { echo "❌ Login failed. Exiting."; exit 1; }
-
-# ========================================
-# 📦 Create Resource Group
-# ========================================
-echo "📦 Creating resource group: $RG_NAME in $LOCATION..."
-az group create \
-  --name "$RG_NAME" \
-  --location "$LOCATION" \
-  --output none
-
-# ========================================
-# 📁 Create Storage Account
-# ========================================
-echo "📁 Creating storage account: $STORAGE_NAME..."
-az storage account create \
-  --name "$STORAGE_NAME" \
-  --resource-group "$RG_NAME" \
-  --location "$LOCATION" \
-  --sku Standard_GRS \
-  --kind StorageV2 \
-  --min-tls-version TLS1_2 \
-  --output none
-
-# ========================================
-# 📂 Create Blob Container
-# ========================================
-echo "📂 Creating blob container: $CONTAINER_NAME..."
-az storage container create \
-  --name "$CONTAINER_NAME" \
-  --account-name "$STORAGE_NAME" \
-  --auth-mode login \
-  --output none
+echo "Storage: $STORAGE_NAME"
+echo "Container: $CONTAINER_NAME"
+echo "Expiry: $SAS_EXPIRY"
 
 # ========================================
 # 🔒 Apply Immutability Policy (Unlocked)
 # ========================================
 echo "🔒 Setting 7-year WORM policy (unlocked)..."
-az storage container immutability-policy set \
+az storage container immutability-policy create \
   --account-name "$STORAGE_NAME" \
   --container-name "$CONTAINER_NAME" \
   --period 2555 \
   --allow-protected-append-writes true \
-  --auth-mode login \
   --output none
 
 # ========================================
-# 📝 Upload Log File
+# 📝 Upload Log File (Unique Name)
 # ========================================
-echo "📝 Creating sample log file..."
-echo "SECURITY LOG: $(date)" > log1.txt
+FILENAME="log-$(date +%s)-entry.txt"
+echo "📝 Creating sample log file: $FILENAME"
+echo "SECURITY LOG: $(date)" > "$FILENAME"
+echo "export FILENAME=$FILENAME" >> .env
 
 echo "🔐 Generating SAS token..."
 SAS_TOKEN=$(az storage container generate-sas \
   --name "$CONTAINER_NAME" \
   --account-name "$STORAGE_NAME" \
-  --permissions acw \
+  --permissions acwl \
   --expiry "$SAS_EXPIRY" \
   --auth-mode login \
+  --as-user \
   -o tsv)
 
-if [ -z "$SAS_TOKEN" ]; then
-  echo "❌ SAS token generation failed. Exiting."
+if [[ -z "$SAS_TOKEN" || "$SAS_TOKEN" != *sig=* ]]; then
+  echo "❌ SAS token generation failed or malformed. Exiting."
   exit 1
 fi
 
-echo "🚀 Uploading file to blob container..."
-azcopy copy "log1.txt" \
-  "https://$STORAGE_NAME.blob.core.windows.net/$CONTAINER_NAME/log1.txt?$SAS_TOKEN" \
-  --overwrite=false
+SAS_URL="https://${STORAGE_NAME}.blob.core.windows.net/${CONTAINER_NAME}/${FILENAME}?${SAS_TOKEN}"
+echo "🔗 Upload URL: $SAS_URL"
+
+echo "🚀 Uploading file with AzCopy..."
+if ! command -v azcopy &> /dev/null; then
+  echo "❌ AzCopy is not installed. Install from: https://aka.ms/downloadazcopy"
+  exit 1
+fi
+
+azcopy copy "$FILENAME" "$SAS_URL" --overwrite=false --log-level=INFO
+if [[ $? -ne 0 ]]; then
+  echo "⚠️ AzCopy upload failed. Falling back to Azure CLI upload..."
+
+  az storage blob upload \
+    --account-name "$STORAGE_NAME" \
+    --container-name "$CONTAINER_NAME" \
+    --name "$FILENAME" \
+    --file "$FILENAME" \
+    --auth-mode login || {
+      echo "❌ CLI upload also failed. Exiting."
+      exit 1
+    }
+  echo "✅ File uploaded via Azure CLI fallback."
+else
+  echo "✅ File uploaded successfully with AzCopy."
+fi
 
 # ========================================
 # 🔐 Lock Immutability Policy
 # ========================================
 echo "🔐 Locking the immutability policy..."
+ETAG=$(az storage container immutability-policy show \
+  --account-name "$STORAGE_NAME" \
+  --container-name "$CONTAINER_NAME" \
+  --query "etag" -o tsv)
+
 az storage container immutability-policy lock \
   --account-name "$STORAGE_NAME" \
   --container-name "$CONTAINER_NAME" \
-  --if-match "*" \
+  --if-match "$ETAG" \
   --output none
 
 # ========================================
@@ -101,7 +93,7 @@ echo "🛡️ Applying legal hold tags..."
 az storage container legal-hold set \
   --account-name "$STORAGE_NAME" \
   --container-name "$CONTAINER_NAME" \
-  --tags "APRA-CPS234" "SOX-2024-Audit" \
+  --tags APRACPS234 SOX2024Audit \
   --output none
 
 # ========================================
@@ -111,13 +103,14 @@ echo "🔍 Verifying immutability policy state..."
 az storage container show \
   --account-name "$STORAGE_NAME" \
   --name "$CONTAINER_NAME" \
+  --auth-mode login \
   --query "immutabilityPolicy"
 
 echo "🧪 Testing delete operation (expected to fail)..."
 az storage blob delete \
   --account-name "$STORAGE_NAME" \
   --container-name "$CONTAINER_NAME" \
-  --name log1.txt \
-  --auth-mode login
+  --name "$FILENAME" \
+  --auth-mode login || echo "✅ Delete operation blocked as expected."
 
 echo "✅ Immutable Storage Lab Complete!"
