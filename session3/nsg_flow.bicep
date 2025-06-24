@@ -123,6 +123,9 @@ resource nicApp 'Microsoft.Network/networkInterfaces@2022-07-01' = {
         }
       }
     ]
+    networkSecurityGroup: {
+      id: nsg.id
+    }
   }
 }
 

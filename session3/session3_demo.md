@@ -57,7 +57,9 @@ bash nsg_flow.sh
     - Flow log type: `Network security group`
     - Select NSG: `nsg-app` and confirm
     - Location: `australiaeast`
-    - Create or select a **Storage Account** for logs
+    - Create **Storage Account** for logs and assign the following roles to the logged-in identity:
+      - Storage Blob Data Contributor
+      - Storage Blob Data Owner
     - Set retention (e.g., 30 days)
   - **Analytics Tab:**
     - Flow logs version: `Version 2`
@@ -70,7 +72,7 @@ bash nsg_flow.sh
 
 ### 🔍 Step 4: Post-Deployment Testing
 
-#### Get Private IP of vm-app
+#### ✅ Get Private IP of vm-app
 
 ```bash
 az vm show \
@@ -80,13 +82,38 @@ az vm show \
   --query privateIps -o tsv
 ```
 
-#### SSH into vm-web (Expected to Fail)
+#### ❌ SSH into vm-app (Expected to Fail)
 
 ```bash
 ssh azureuser@<vm-app-private-ip>
 ```
 
-⏳ You should see a timeout or connection denied — verifying NSG is blocking the traffic.
+⏳ You should see a timeout or connection denied — verifying NSG is blocking the SSH traffic.
+
+#### ✅ Get Public IP of vm-web
+
+```bash
+az vm show \
+  --resource-group rg-flow-lab \
+  --name vm-web \
+  --show-details \
+  --query publicIps \
+  -o tsv
+```
+
+#### ✅ SSH into vm-web (Expected to Succeed)
+
+```bash
+ssh azureuser@<vm-web-public-ip>
+```
+
+#### ❌ SSH into vm-app from vm-web (Expected to Fail)
+
+```bash
+ssh azureuser@<vm-app-private-ip>
+```
+
+⏳ You should see a timeout or connection denied — verifying NSG is blocking the SSH traffic even from within vm-web.
 
 ---
 
@@ -106,9 +133,16 @@ ssh azureuser@<vm-app-private-ip>
 #### 🔢 Option B: Using CLI
 
 ```bash
+# Get the conainer list in the storage account
+az storage container list \
+  --account-name flsay3lw6cr4y4mwq \
+  --auth-mode login \
+  --output table
+
+# Get the blob list in the container
 az storage blob list \
   --account-name flsay3lw6cr4y4mwq \
-  --container-name insights-logs-networksecuritygroupflowevent \
+  --container-name <container name> \
   --output table
 ```
 
@@ -117,7 +151,7 @@ az storage blob list \
 ```bash
 az storage blob download \
   --account-name flsay3lw6cr4y4mwq \
-  --container-name insights-logs-networksecuritygroupflowevent \
+  --container-name <conainer name> \
   --name <blob-path> \
   --file ./flowlog.json
 ```
