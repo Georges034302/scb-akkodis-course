@@ -88,7 +88,7 @@ az storage container create \
 
 ### 🔹 Step 5: Assign Required Role in Azure Portal
 
-Before performing blob-level operations (e.g., uploading, deleting, locking policies), ensure that your logged-in identity has the **Storage Blob Data Contributor** role assigned on the storage account.
+Before performing blob-level operations (e.g., uploading, setting policies), ensure that your logged-in identity has the **Storage Blob Data Contributor** role assigned on the storage account.
 
 **To do this via the Azure Portal:**
 
@@ -104,7 +104,9 @@ Before performing blob-level operations (e.g., uploading, deleting, locking poli
 
 ---
 
-### 🔹 Step 6: Set Immutable Policy (Unlocked)
+### 🔹 Step 6: Set Immutable Policy (Unlocked Only — DO NOT LOCK IN TEST)
+
+> ⚠️ **Do not lock in test/demo environments. Locked policies are permanent and prevent deletion.**
 
 ```bash
 az storage container immutability-policy create \
@@ -146,21 +148,7 @@ azcopy copy "$FILENAME" "$SAS_URL" --overwrite=false --log-level=INFO || {
 
 ---
 
-### 🔹 Step 8: Lock Immutability Policy
-
-```bash
-ETAG=$(az storage container immutability-policy show \
-  --account-name "$STORAGE_NAME" \
-  --container-name audit-logs \
-  --query etag -o tsv)
-
-az storage container immutability-policy lock \
-  --account-name "$STORAGE_NAME" \
-  --container-name audit-logs \
-  --if-match "$ETAG"
-```
-
-### 🔹 Step 9: Apply Legal Hold (Optional)
+### 🔹 Step 8: Apply Legal Hold (Optional)
 
 ```bash
 az storage container legal-hold set \
@@ -177,28 +165,28 @@ az storage container legal-hold set \
 | ---------------- | ---------------------------------------------- |
 | Storage Account  | Geo-redundant (GRS), TLS 1.2+, StorageV2       |
 | Blob Container   | Named `audit-logs`, private, with WORM policy  |
-| Immutable Policy | Locked, 2555 days, append-only writes enabled  |
+| Immutable Policy | **Unlocked**, 2555 days, append-only writes    |
 | Legal Hold       | Applied with tags (e.g., `APRA-CPS234`)        |
 | Blob Uploaded    | File uploaded successfully using AzCopy or CLI |
 
 ### ✅ Immutable Storage Outcome Review
 
-| ✅ Criterion                          | Status      | Notes                                    |                                                |
-| ------------------------------------ | ----------- | ---------------------------------------- | ---------------------------------------------- |
-| **Storage Account**                  | ✅ Created   | GRS + TLS 1.2                            |                                                |
-| **Container**                        | ✅ Created   | `audit-logs`                             |                                                |
-| **WORM Immutability Policy (7 yrs)** | ✅ Locked    | Can't be changed — secure by design      |                                                |
-| **Protected Append Writes**          | ✅ Enabled   | Log files can only be added, not altered |                                                |
-| **Legal Hold Tags**                  | ✅ Applied   | (`APRA-CPS234`, `SOX2024Audit`)          |                                                |
-| **Blob Upload with Fallback**        | ✅ Robust    | AzCopy → CLI fallback logic              |                                                |
-| **Delete Operation Blocked**         | ✅ Confirmed | Immutability enforced                    |                                                |
-| **Final Message**                    | ✅ Completed | End-to-end workflow succeeded            | File uploaded successfully using AzCopy or CLI |
+| ✅ Criterion                          | Status      | Notes                                    |
+| ------------------------------------ | ----------- | ---------------------------------------- |
+| **Storage Account**                  | ✅ Created   | GRS + TLS 1.2                            |
+| **Container**                        | ✅ Created   | `audit-logs`                             |
+| **WORM Immutability Policy (7 yrs)** | ✅ Unlocked  | Can be deleted for cleanup               |
+| **Protected Append Writes**          | ✅ Enabled   | Log files can only be added, not altered |
+| **Legal Hold Tags**                  | ✅ Applied   | (`APRA-CPS234`, `SOX2024Audit`)          |
+| **Blob Upload with Fallback**        | ✅ Robust    | AzCopy → CLI fallback logic              |
+| **Delete Operation (Unlocked)**      | ✅ Allowed   | Can delete blob or container             |
+| **Final Message**                    | ✅ Completed | End-to-end workflow succeeded            |
 
 ---
 
 ## 🔍 Test Scenarios
 
-### ✅ Immutability Lock State
+### ✅ Immutability Policy State
 
 ```bash
 az storage container immutability-policy show \
@@ -206,14 +194,31 @@ az storage container immutability-policy show \
   --container-name audit-logs
 ```
 
-### ✅ Delete Attempt (Should Fail)
+### ✅ Upload Another Log File
 
 ```bash
-az storage blob delete \
+NEWFILE="log-$(date +%s)-append.txt"
+echo "SECURITY APPEND: $(date)" > "$NEWFILE"
+
+az storage blob upload \
+  --account-name "$STORAGE_NAME" \
+  --container-name audit-logs \
+  --name "$NEWFILE" \
+  --file "$NEWFILE" \
+  --auth-mode login
+```
+
+### ❌ Attempt to Overwrite Blob (Should Fail)
+
+```bash
+echo "TAMPERED LOG" > "$FILENAME"
+az storage blob upload \
   --account-name "$STORAGE_NAME" \
   --container-name audit-logs \
   --name "$FILENAME" \
-  --auth-mode login || echo "✅ Delete blocked as expected."
+  --file "$FILENAME" \
+  --overwrite true \
+  --auth-mode login
 ```
 
 ### ✅ Legal Hold View
@@ -224,9 +229,36 @@ az storage container legal-hold show \
   --container-name audit-logs
 ```
 
----
+### ❌ Attempt to Delete Blob (Should Fail Due to Legal Hold)
 
-## 🧼 Cleanup
+```bash
+az storage blob delete \
+  --account-name "$STORAGE_NAME" \
+  --container-name audit-logs \
+  --name "$FILENAME" \
+  --auth-mode login
+```
+
+### ✅ Remove Legal Hold
+
+```bash
+az storage container legal-hold clear \
+  --account-name "$STORAGE_NAME" \
+  --container-name audit-logs \
+  --tags APRACPS234 SOX2024Audit
+```
+
+### ✅ Delete Blob (After Legal Hold Removed)
+
+```bash
+az storage blob delete \
+  --account-name "$STORAGE_NAME" \
+  --container-name audit-logs \
+  --name "$FILENAME" \
+  --auth-mode login
+```
+
+### ✅ Cleanup (Remove Resource Group)
 
 ```bash
 az group delete --name "$RG_NAME" --yes --no-wait

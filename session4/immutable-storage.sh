@@ -11,7 +11,7 @@ echo "Container: $CONTAINER_NAME"
 echo "Expiry: $SAS_EXPIRY"
 
 # ========================================
-# 🔒 Apply Immutability Policy (Unlocked)
+# 🔒 Apply Immutability Policy (Unlocked Only)
 # ========================================
 echo "🔒 Setting 7-year WORM policy (unlocked)..."
 az storage container immutability-policy create \
@@ -56,7 +56,6 @@ fi
 azcopy copy "$FILENAME" "$SAS_URL" --overwrite=false --log-level=INFO
 if [[ $? -ne 0 ]]; then
   echo "⚠️ AzCopy upload failed. Falling back to Azure CLI upload..."
-
   az storage blob upload \
     --account-name "$STORAGE_NAME" \
     --container-name "$CONTAINER_NAME" \
@@ -72,22 +71,7 @@ else
 fi
 
 # ========================================
-# 🔐 Lock Immutability Policy
-# ========================================
-echo "🔐 Locking the immutability policy..."
-ETAG=$(az storage container immutability-policy show \
-  --account-name "$STORAGE_NAME" \
-  --container-name "$CONTAINER_NAME" \
-  --query "etag" -o tsv)
-
-az storage container immutability-policy lock \
-  --account-name "$STORAGE_NAME" \
-  --container-name "$CONTAINER_NAME" \
-  --if-match "$ETAG" \
-  --output none
-
-# ========================================
-# 🛡️ Apply Legal Hold
+# 🛡️ Apply Legal Hold (Optional)
 # ========================================
 echo "🛡️ Applying legal hold tags..."
 az storage container legal-hold set \
@@ -100,17 +84,15 @@ az storage container legal-hold set \
 # 🔍 Final Validation
 # ========================================
 echo "🔍 Verifying immutability policy state..."
-az storage container show \
+az storage container immutability-policy show \
   --account-name "$STORAGE_NAME" \
-  --name "$CONTAINER_NAME" \
-  --auth-mode login \
-  --query "immutabilityPolicy"
+  --container-name "$CONTAINER_NAME"
 
-echo "🧪 Testing delete operation (expected to fail)..."
+echo "🧪 Testing delete operation (should succeed)..."
 az storage blob delete \
   --account-name "$STORAGE_NAME" \
   --container-name "$CONTAINER_NAME" \
   --name "$FILENAME" \
-  --auth-mode login || echo "✅ Delete operation blocked as expected."
+  --auth-mode login && echo "✅ Delete succeeded as expected (unlocked)."
 
-echo "✅ Immutable Storage Lab Complete!"
+echo "✅ Immutable Storage Lab (Unlocked) Complete!"
