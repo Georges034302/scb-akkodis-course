@@ -1,0 +1,5 @@
+azcopy_linux_amd64_*/
+azcopy_linux_amd64_*
+downloadazcopy-v10-linux
+.env
+env
