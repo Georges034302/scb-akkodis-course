@@ -180,7 +180,40 @@ A storage account and container are deployed with a time-based WORM policy (2555
 <details>
 <summary><strong>Session 5 - Demo</strong> (click to expand/hide)</summary>
 
-<!-- No data yet -->
+### 🧪 Hands-On Lab: Azure DMS Migration – SQL Server (Docker) to Azure SQL Managed Instance
+
+#### 🏷️ Lab Title
+Online Migration from On-Premises SQL Server (Docker) to Azure SQL Managed Instance using Azure Database Migration Service (DMS)
+
+#### 🎯 Lab Objective
+Simulate a real-world **online migration** from a local SQL Server (running in Docker) to Azure SQL Managed Instance (MI) using Azure DMS, with all steps performed via Azure CLI and JSON configuration files.
+
+#### ✅ Lab Scenario
+You are tasked with migrating a production SQL Server database to Azure SQL MI. The source is simulated using a Docker container. The migration must be automated, auditable, and validated using CLI and SQL queries.
+
+---
+
+### 🔧 Lab Steps Overview
+
+| Setup Step | Description                                                      |
+|------------|------------------------------------------------------------------|
+| 1          | Prepare Docker SQL Server as the source                          |
+| 2          | Define source, target, and database options JSON config files    |
+| 3          | Create Azure DMS instance, migration project, and migration task |
+| 4          | Monitor migration and validate results in Azure SQL MI           |
+
+| Validation Step | Description                                    |
+|-----------------|------------------------------------------------|
+| 1               | Connect to Azure SQL MI and validate data      |
+| 2               | Confirm schema and row count match source      |
+| 3               | Review DMS migration status and logs           |
+
+| Expected Outcome | Description                                   |
+|------------------|-----------------------------------------------|
+| 1                | Docker SQL Server simulates on-premises source|
+| 2                | Azure SQL MI receives data via DMS migration  |
+| 3                | CLI automates full workflow                   |
+| 4                | Manual or scripted query confirms migration   |
 
 </details>
 
