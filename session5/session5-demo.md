@@ -8,11 +8,11 @@ This hands-on lab demonstrates a **complete online migration** of a SQL Server d
 
 By completing this lab, you will:
 
-- Simulate an on-premises SQL Server using Docker.  
-- Create and populate a sample database (`MyDatabase`).  
-- Generate JSON connection files dynamically using variables.  
-- Provision Azure DMS and configure an online migration task.  
-- Execute the migration from Docker-hosted SQL to Azure SQL MI.  
+- Simulate an on-premises SQL Server using Docker.
+- Create and populate a sample database (`MyDatabase`).
+- Generate JSON connection files dynamically using variables.
+- Provision Azure DMS and configure an online migration task.
+- Execute the migration from Docker-hosted SQL to Azure SQL MI.
 - Validate the migration using `sqlcmd`.
 
 ---
@@ -21,9 +21,9 @@ By completing this lab, you will:
 
 Ensure the following are available:
 
-- Active Azure Subscription  
-- Azure SQL Managed Instance (provisioned and publicly accessible)  
-- Docker installed (GitHub Codespaces or local)  
+- Active Azure Subscription
+- Azure SQL Managed Instance (provisioned and publicly accessible)
+- Docker installed (GitHub Codespaces or local)
 - Azure CLI installed and authenticated (`az login`)
 
 ---
@@ -32,27 +32,49 @@ Ensure the following are available:
 
 ### 🐳 Run SQL Server in Docker
 
+#### 🌐 Create Docker network
 ```bash
-read -s -p "Enter SQL Server 'sa' password: " SQL_SA_PASSWORD && echo
-
-docker run -e "ACCEPT_EULA=Y" \
-           -e "SA_PASSWORD=$SQL_SA_PASSWORD" \
-           -p 1433:1433 \
-           --name sqlsource \
-           -d mcr.microsoft.com/mssql/server:2019-latest
+docker network create sqlnet
 ```
 
-### 🛠️ Create Test Database and Insert Data
+#### 🐳 Start SQL Server
+```bash
+docker run -d \
+  --name sqlsource \
+  --network sqlnet \
+  -e "ACCEPT_EULA=Y" \
+  -e "SA_PASSWORD=$SQL_SA_PASSWORD" \
+  mcr.microsoft.com/mssql/server:2019-latest
+```
+
+#### 📦 Create the database
+```bash
+docker run --rm \
+  --network sqlnet \
+  mcr.microsoft.com/mssql-tools \
+  /opt/mssql-tools/bin/sqlcmd \
+  -S sqlsource -U sa -P "$SQL_SA_PASSWORD" -Q "CREATE DATABASE MyDatabase;"
+```
+
+#### 🛠️ Create table + insert data inside MyDatabase
+```bash
+docker run --rm \
+  --network sqlnet \
+  mcr.microsoft.com/mssql-tools \
+  /opt/mssql-tools/bin/sqlcmd \
+  -S sqlsource -U sa -P "$SQL_SA_PASSWORD" -d MyDatabase -Q "
+    CREATE TABLE Users (id INT, name NVARCHAR(50));
+    INSERT INTO Users VALUES (1, 'Alice'), (2, 'Bob');"
+```
+
+#### 🧪 Post On-prem SQL Simulation Test
 
 ```bash
-docker exec -it sqlsource /opt/mssql-tools/bin/sqlcmd \
-  -S localhost \
-  -U sa \
-  -P "$SQL_SA_PASSWORD" \
-  -Q "CREATE DATABASE MyDatabase; \
-      USE MyDatabase; \
-      CREATE TABLE Users (id INT, name NVARCHAR(50)); \
-      INSERT INTO Users VALUES (1, 'Alice'), (2, 'Bob');"
+docker run --rm \
+  --network sqlnet \
+  mcr.microsoft.com/mssql-tools \
+  /opt/mssql-tools/bin/sqlcmd \
+  -S sqlsource -U sa -P "$SQL_SA_PASSWORD" -d MyDatabase -Q "SELECT * FROM Users;"
 ```
 
 ---
@@ -101,7 +123,7 @@ EOF
 
 ## ☁️ Step 3: Provision Azure DMS and Configure Migration
 
-### 🔧 Set Environment Variables
+#### 🔧 Set Environment Variables
 
 ```bash
 RESOURCE_GROUP="rg-demo"
@@ -111,7 +133,7 @@ LOCATION="australiaeast"
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 ```
 
-### 📁 Create Resource Group
+#### 📁 Create Resource Group
 
 ```bash
 az group create \
@@ -119,7 +141,12 @@ az group create \
   --location $LOCATION
 ```
 
-### 🌐 Create Virtual Network and Subnet
+#### 🛡️ Register required provider
+```bash
+az provider register --namespace Microsoft.DataMigration
+```
+
+#### 🌐 Create Virtual Network and Subnet
 
 ```bash
 az network vnet create \
@@ -131,7 +158,7 @@ az network vnet create \
   --subnet-prefixes 10.10.1.0/24
 ```
 
-### 📡 Delegate Subnet to Microsoft.DataMigration
+#### 📡 Delegate Subnet to Microsoft.DataMigration
 
 ```bash
 az network vnet subnet update \
@@ -141,24 +168,24 @@ az network vnet subnet update \
   --delegations Microsoft.DataMigration/services
 ```
 
-### 🆔 Get Subnet Resource ID
+#### 🆔 Get Subnet Resource ID
 
 ```bash
 SUBNET_ID="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Network/virtualNetworks/$VNET_NAME/subnets/$SUBNET_NAME"
 ```
 
-### 🏗️ Create Azure DMS Instance
+#### 🏗️ Create Azure DMS Instance
 
 ```bash
 az dms create \
-  --location $LOCATION \
+  --location "$LOCATION" \
   --name dms-demo \
-  --resource-group $RESOURCE_GROUP \
-  --sku-name "Standard_1vCore" \
+  --resource-group "$RESOURCE_GROUP" \
+  --sku-name "Standard_2vCores" \
   --subnet "$SUBNET_ID"
 ```
 
-### 📂 Create DMS Project
+#### 📂 Create DMS Project
 
 ```bash
 az dms project create \
@@ -169,7 +196,7 @@ az dms project create \
   --target-platform SQLMI
 ```
 
-### 🚚 Create DMS Migration Task
+#### 🚚 Create DMS Migration Task
 
 ```bash
 az dms task create \
@@ -185,19 +212,19 @@ az dms task create \
 
 ---
 
-## 🔍 Step 4: Validate Migration Using `sqlcmd`
+## 🔍 Step 4: Post Migration Testing (Validate Migration Using `sqlcmd`)
 
-### 🚪 Login to Azure SQL Managed Instance
+#### 🚪 Login to Azure SQL Managed Instance
 
 ```bash
 docker run --rm -it mcr.microsoft.com/mssql-tools \
   sqlcmd -S ${SQL_MI_NAME}.public.australiaeast.database.windows.net \
-         -U sqladmin \
-         -P "$SQL_MI_PASSWORD" \
-         -d MyDatabase
+  -U sqladmin \
+  -P "$SQL_MI_PASSWORD" \
+  -d MyDatabase
 ```
 
-### 📋 Run These Queries in `sqlcmd`
+#### 📋 Run These Queries in `sqlcmd`
 
 ```sql
 SELECT COUNT(*) FROM Users;
@@ -232,4 +259,4 @@ EXIT
 
 ---
 
-🚀 This lab simulates real-world **hybrid cloud migration** using **Azure-native services** with built-in support for rollback, scalability, and modernization readiness.
+🚀 This lab simulates real-world **hybrid cloud migration** using **Azure-native services** with built-in support for **online migrations**. For more complex scenarios, consider exploring **Azure Migrate** and other advanced features of **Azure DMS**.
