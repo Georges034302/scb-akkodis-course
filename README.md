@@ -220,12 +220,41 @@ You are tasked with migrating a production SQL Server database to Azure SQL MI. 
 <details>
 <summary><strong>Session 6 - Demo</strong> (click to expand/hide)</summary>
 
-<!-- No data yet -->
+### 🧪 Hands-On Lab: Azure Policy & Blueprints for Enterprise Governance
+
+#### 🏷️ Lab Title
+Automate and Enforce Cloud Governance with Azure Policy and Blueprints
+
+#### 🎯 Lab Objective
+Design and implement enterprise governance at scale using Azure Policy and Blueprints. Enforce compliance, resource consistency, and security standards across multiple subscriptions using policy definitions, initiatives, and blueprint assignments.
+
+#### ✅ Lab Scenario
+You are tasked with ensuring all Azure resources in your organization comply with security and operational standards. You will use Azure Policy to restrict resource types, enforce tagging, and require encryption. Blueprints will be used to deploy standardized environments with built-in compliance controls.
+
+---
+
+### 🔧 Lab Steps Overview
+
+| Setup Step | Description                                                      |
+|------------|------------------------------------------------------------------|
+| 1          | Create a resource group for governance artifacts                 |
+| 2          | Author and assign Azure Policy definitions (e.g., allowed SKUs, required tags, encryption) |
+| 3          | Group policies into an initiative and assign to a subscription   |
+| 4          | Create and publish an Azure Blueprint with artifacts (policies, RBAC, ARM templates) |
+| 5          | Assign the blueprint to a subscription or management group       |
+
+| Validation Step | Description                                    |
+|-----------------|------------------------------------------------|
+| 1               | Deploy resources and verify policy enforcement  |
+| 2               | Attempt to create non-compliant resources      |
+| 3               | Review compliance results in Azure Policy blade|
+| 4               | Confirm blueprint assignment and artifact deployment |
+
+| Expected Outcome | Description                                   |
+|------------------|-----------------------------------------------|
+| 1                | Non-compliant resources are denied or flagged |
+| 2                | Required tags and settings are enforced       |
+| 3                | Blueprint assignments deploy consistent environments |
+| 4                | Compliance dashboard reflects policy status   |
 
 </details>
-
----
-👨‍💻 Author: Georges Bou Ghantous
-
-* Azure Training Series by Akkodis, featuring hands-on labs and demos across six sessions on IAM, threat detection, secure networking, data protection, app migration, and compliance in Azure.
----
