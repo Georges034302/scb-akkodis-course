@@ -258,3 +258,6 @@ You are tasked with ensuring all Azure resources in your organization comply wit
 | 4                | Compliance dashboard reflects policy status   |
 
 </details>
+
+🧑‍🏫 Author: Georges Bou Ghantous
+<sub><i>This repository delivers enterprise-ready Azure training labs and demos developed by Georges Bou Ghantous for SCB, covering cloud identity, secure networking, threat detection, data protection, migration, and governance in real-world banking scenarios.</i></sub>
