@@ -126,7 +126,7 @@ EOF
 #### 🔧 Set Environment Variables
 
 ```bash
-RESOURCE_GROUP="rg-demo"
+RESOURCE_GROUP="rg-dms-demo"
 VNET_NAME="dms-vnet"
 SUBNET_NAME="dms-subnet"
 LOCATION="australiaeast"
@@ -158,16 +158,6 @@ az network vnet create \
   --subnet-prefixes 10.10.1.0/24
 ```
 
-#### 📡 Delegate Subnet to Microsoft.DataMigration
-
-```bash
-az network vnet subnet update \
-  --name $SUBNET_NAME \
-  --vnet-name $VNET_NAME \
-  --resource-group $RESOURCE_GROUP \
-  --delegations Microsoft.DataMigration/services
-```
-
 #### 🆔 Get Subnet Resource ID
 
 ```bash
@@ -185,29 +175,27 @@ az dms create \
   --subnet "$SUBNET_ID"
 ```
 
-#### 📂 Create DMS Project
+#### 📂 Create DMS project using REST API
 
 ```bash
-az dms project create \
-  --resource-group $RESOURCE_GROUP \
-  --service-name dms-demo \
-  --name sqlmig-project \
-  --source-platform SQL \
-  --target-platform SQLMI
+az rest --method PUT \
+  --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.DataMigration/services/$DMS_NAME/projects/$PROJECT_NAME?api-version=2022-03-30-preview" \
+  --body "{\"location\": \"$LOCATION\", \"properties\": {\"sourcePlatform\": \"SQL\", \"targetPlatform\": \"SQLDB\"}}" \
+  --headers "Content-Type=application/json"
 ```
 
 #### 🚚 Create DMS Migration Task
 
 ```bash
-az dms task create \
-  --resource-group $RESOURCE_GROUP \
-  --project-name sqlmig-project \
-  --service-name dms-demo \
-  --name sqlmig-task \
-  --task-type OnlineMigration \
-  --source-connection-json source.json \
-  --target-connection-json target.json \
-  --database-options-json db-options.json
+az datamigration sql-db create \
+  --resource-group "$RESOURCE_GROUP" \
+  --sqldb-instance-name "$SQL_SERVER_NAME" \
+  --target-db-name "$SQL_DB_NAME" \
+  --migration-service "$MIGRATION_SERVICE_ID" \
+  --scope "$SQL_SCOPE" \
+  --source-database-name "$SQL_DB_NAME" \
+  --source-sql-connection authentication="SqlAuthentication" data-source="sqlsource" user-name="$SQL_SA_USER" password="$SQL_SA_PASSWORD" encrypt-connection=true trust-server-certificate=true \
+  --target-sql-connection authentication="SqlAuthentication" data-source="$SQL_SERVER_NAME.database.windows.net" user-name="$SQL_MI_ADMIN_USER" password="$SQL_MI_PASSWORD" encrypt-connection=true trust-server-certificate=true
 ```
 
 ---

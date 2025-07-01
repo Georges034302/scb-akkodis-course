@@ -1,42 +1,37 @@
 #!/bin/bash
+set -e
 
 echo "⚙️  Generating Azure SQL MI migration config files..."
 sleep 2
-# Load SQL_SA_PASSWORD from .env if available
+
+# Load .env if available
 if [ -f .env ]; then
   source .env
+else
+  echo "❌ .env file not found. Run ./init_env.sh first."
+  exit 1
 fi
 
-# Prompt for Azure SQL MI name and admin password
-if [ -z "$SQL_MI_NAME" ]; then
-  SQL_MI_NAME="sqlmi$RANDOM"
-  echo "🆕 Generated SQL MI Name: $SQL_MI_NAME"
-fi
+# Validate required environment variables
+for var in SQL_SA_USER SQL_SA_PASSWORD SQL_MI_NAME SQL_MI_PASSWORD SQL_DB_NAME; do
+  if [ -z "${!var}" ]; then
+    echo "❌ Missing $var in .env. Run ./init_env.sh first."
+    exit 1
+  fi
+done
 
-# Generate a random strong password for Azure SQL MI admin
-SQL_MI_PASSWORD="P@ssw0rd$(date +%s%N | sha256sum | head -c 12)"
-echo "🔑 Generated Azure SQL MI admin password: $SQL_MI_PASSWORD"
-
-# Export to .env for later use
-sed -i '/^export SQL_MI_NAME=/d' .env 2>/dev/null
-sed -i '/^export SQL_MI_PASSWORD=/d' .env 2>/dev/null
-echo "export SQL_MI_NAME=$SQL_MI_NAME" >> .env
-echo "export SQL_MI_PASSWORD=$SQL_MI_PASSWORD" >> .env
-echo "💾 Exported SQL_MI_NAME and SQL_MI_PASSWORD to .env"
-
-# Create source.json
+# Generate source.json
 echo "📝 Creating source.json..."
 cat > source.json <<EOF
 {
-  "dataSource": "127.0.0.1",
+  "dataSource": "sqlsource",
   "authentication": "SqlAuthentication",
-  "userName": "sa",
+  "userName": "$SQL_SA_USER",
   "password": "$SQL_SA_PASSWORD"
 }
 EOF
-echo "✅ source.json created."
 
-# Create target.json
+# Generate target.json
 echo "📝 Creating target.json..."
 cat > target.json <<EOF
 {
@@ -46,28 +41,25 @@ cat > target.json <<EOF
   "password": "$SQL_MI_PASSWORD"
 }
 EOF
-echo "✅ target.json created."
 
-# Create db-options.json
+# Generate db-options.json
 echo "📝 Creating db-options.json..."
 cat > db-options.json <<EOF
 {
   "selectedDatabases": [
     {
-      "name": "MyDatabase",
+      "name": "$SQL_DB_NAME",
       "tableMap": "*"
     }
   ]
 }
 EOF
-echo "✅ db-options.json created."
 
-echo "🎉 Migration config files ready: source.json, target.json, db-options.json"
-echo "✅ SQL_MI_NAME and SQL_MI_PASSWORD exported to .env"
-# Protect JSON files from being committed
-echo "🔒 Adding JSON files to .gitignore..."
+echo "✅ Migration config files ready: source.json, target.json, db-options.json"
+
+# Add these files to .gitignore
+echo "🔒 Ensuring JSON files are in .gitignore..."
 for f in source.json target.json db-options.json; do
   grep -qxF "$f" .gitignore || echo "$f" >> .gitignore
 done
-sleep 2
-echo "✅ JSON files added to .gitignore (prevent accidental commit)"
+echo "✅ JSON files added to .gitignore"
