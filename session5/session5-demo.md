@@ -1,18 +1,17 @@
-# 🛠️ Azure DMS Migration Demo: SQL Server (Docker) ➞ Azure SQL Managed Instance
+# 🛠️ Azure DMS Migration Demo: Azure SQL ➞ Azure SQL
 
 ---
 
 ## 🎯 Objectives
 
-This hands-on lab demonstrates a **complete online migration** of a SQL Server database (simulated in Docker) to an **Azure SQL Managed Instance (MI)** using **Azure Database Migration Service (DMS)**.
+This hands-on lab demonstrates a **complete online migration** of a SQL Server database from **one Azure SQL Server** to another using **Azure Database Migration Service (DMS)**.
 
 By completing this lab, you will:
 
-- Simulate an on-premises SQL Server using Docker.
-- Create and populate a sample database (`MyDatabase`).
-- Generate JSON connection files dynamically using variables.
-- Provision Azure DMS and configure an online migration task.
-- Execute the migration from Docker-hosted SQL to Azure SQL MI.
+- Create a source Azure SQL Server and populate it with data.
+- Create a target Azure SQL Server and empty database.
+- Provision Azure DMS with required networking.
+- Execute the migration using CLI and REST API.
 - Validate the migration using `sqlcmd`.
 
 ---
@@ -22,133 +21,98 @@ By completing this lab, you will:
 Ensure the following are available:
 
 - Active Azure Subscription
-- Azure SQL Managed Instance (provisioned and publicly accessible)
-- Docker installed (GitHub Codespaces or local)
 - Azure CLI installed and authenticated (`az login`)
+- Docker installed (for `sqlcmd` container usage)
 
 ---
 
-## 🧱 Step 1: Simulate On-Prem SQL Server (Docker)
-
-### 🐳 Run SQL Server in Docker
-
-#### 🌐 Create Docker network
-```bash
-docker network create sqlnet
-```
-
-#### 🐳 Start SQL Server
-```bash
-docker run -d \
-  --name sqlsource \
-  --network sqlnet \
-  -e "ACCEPT_EULA=Y" \
-  -e "SA_PASSWORD=$SQL_SA_PASSWORD" \
-  mcr.microsoft.com/mssql/server:2019-latest
-```
-
-#### 📦 Create the database
-```bash
-docker run --rm \
-  --network sqlnet \
-  mcr.microsoft.com/mssql-tools \
-  /opt/mssql-tools/bin/sqlcmd \
-  -S sqlsource -U sa -P "$SQL_SA_PASSWORD" -Q "CREATE DATABASE MyDatabase;"
-```
-
-#### 🛠️ Create table + insert data inside MyDatabase
-```bash
-docker run --rm \
-  --network sqlnet \
-  mcr.microsoft.com/mssql-tools \
-  /opt/mssql-tools/bin/sqlcmd \
-  -S sqlsource -U sa -P "$SQL_SA_PASSWORD" -d MyDatabase -Q "
-    CREATE TABLE Users (id INT, name NVARCHAR(50));
-    INSERT INTO Users VALUES (1, 'Alice'), (2, 'Bob');"
-```
-
-#### 🧪 Post On-prem SQL Simulation Test
+## 🧱 Step 1: Create Source SQL Server & Populate Database
 
 ```bash
-docker run --rm \
-  --network sqlnet \
-  mcr.microsoft.com/mssql-tools \
-  /opt/mssql-tools/bin/sqlcmd \
-  -S sqlsource -U sa -P "$SQL_SA_PASSWORD" -d MyDatabase -Q "SELECT * FROM Users;"
-```
-
----
-
-## 🗂️ Step 2: Generate JSON Connection Files
-
-### 🧾 Create `source.json`, `target.json`, and `db-options.json`
-
-```bash
-SQL_MI_NAME="sqlmi$RANDOM"
-echo "Generated SQL MI Name: $SQL_MI_NAME"
-
-read -s -p "Enter Azure SQL MI admin password: " SQL_MI_PASSWORD && echo
-
-cat > source.json <<EOF
-{
-  "dataSource": "127.0.0.1",
-  "authentication": "SqlAuthentication",
-  "userName": "sa",
-  "password": "$SQL_SA_PASSWORD"
-}
-EOF
-
-cat > target.json <<EOF
-{
-  "dataSource": "${SQL_MI_NAME}.public.australiaeast.database.windows.net",
-  "authentication": "SqlAuthentication",
-  "userName": "sqladmin",
-  "password": "$SQL_MI_PASSWORD"
-}
-EOF
-
-cat > db-options.json <<EOF
-{
-  "selectedDatabases": [
-    {
-      "name": "MyDatabase",
-      "tableMap": "*"
-    }
-  ]
-}
-EOF
-```
-
----
-
-## ☁️ Step 3: Provision Azure DMS and Configure Migration
-
-#### 🔧 Set Environment Variables
-
-```bash
+# Variables
 RESOURCE_GROUP="rg-dms-demo"
+LOCATION="australiaeast"
+SQL_SOURCE_NAME="sqlsource$RANDOM"
+SQL_TARGET_NAME="sqltarget$RANDOM"
+SQL_ADMIN_USER="sqladmin"
+SQL_ADMIN_PASSWORD="P@ssw0rd$RANDOM"
+SQL_DB_NAME="MyDatabase"
+
+# Create resource group
+az group create --name $RESOURCE_GROUP --location $LOCATION
+
+# Create source SQL Server
+az sql server create \
+  --name $SQL_SOURCE_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --location $LOCATION \
+  --admin-user $SQL_ADMIN_USER \
+  --admin-password $SQL_ADMIN_PASSWORD
+
+# Create source DB
+az sql db create \
+  --resource-group $RESOURCE_GROUP \
+  --server $SQL_SOURCE_NAME \
+  --name $SQL_DB_NAME \
+  --service-objective S0
+
+# Allow Azure services to access
+az sql server firewall-rule create \
+  --resource-group $RESOURCE_GROUP \
+  --server $SQL_SOURCE_NAME \
+  --name AllowAllAzureIPs \
+  --start-ip-address 0.0.0.0 \
+  --end-ip-address 0.0.0.0
+
+# Insert data
+docker run --rm mcr.microsoft.com/mssql-tools \
+  sqlcmd -S ${SQL_SOURCE_NAME}.database.windows.net \
+  -U $SQL_ADMIN_USER -P $SQL_ADMIN_PASSWORD \
+  -d $SQL_DB_NAME -Q "CREATE TABLE Users (id INT, name NVARCHAR(50)); INSERT INTO Users VALUES (1,'Alice'), (2,'Bob');"
+```
+
+---
+
+## ☁️ Step 2: Prepare Target SQL Server
+
+```bash
+# Create target SQL Server
+az sql server create \
+  --name $SQL_TARGET_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --location $LOCATION \
+  --admin-user $SQL_ADMIN_USER \
+  --admin-password $SQL_ADMIN_PASSWORD
+
+# Create empty target DB
+az sql db create \
+  --resource-group $RESOURCE_GROUP \
+  --server $SQL_TARGET_NAME \
+  --name $SQL_DB_NAME \
+  --service-objective S0
+
+# Allow Azure access
+az sql server firewall-rule create \
+  --resource-group $RESOURCE_GROUP \
+  --server $SQL_TARGET_NAME \
+  --name AllowAllAzureIPs \
+  --start-ip-address 0.0.0.0 \
+  --end-ip-address 0.0.0.0
+```
+
+---
+
+## 🌐 Step 3: Provision DMS + VNet
+
+```bash
 VNET_NAME="dms-vnet"
 SUBNET_NAME="dms-subnet"
-LOCATION="australiaeast"
+DMS_NAME="dms-demo"
+PROJECT_NAME="sqlmig-project"
+TASK_NAME="sqlmig-task"
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-```
 
-#### 📁 Create Resource Group
-
-```bash
-az group create \
-  --name $RESOURCE_GROUP \
-  --location $LOCATION
-```
-
-#### 🛡️ Register required provider
-```bash
-az provider register --namespace Microsoft.DataMigration
-```
-
-#### 🌐 Create Virtual Network and Subnet
-
-```bash
+# Create VNet and delegated subnet
 az network vnet create \
   --name $VNET_NAME \
   --resource-group $RESOURCE_GROUP \
@@ -156,82 +120,58 @@ az network vnet create \
   --address-prefixes 10.10.0.0/16 \
   --subnet-name $SUBNET_NAME \
   --subnet-prefixes 10.10.1.0/24
-```
 
-#### 🆔 Get Subnet Resource ID
+# Delegate subnet to Microsoft.DataMigration
+az network vnet subnet update \
+  --resource-group $RESOURCE_GROUP \
+  --vnet-name $VNET_NAME \
+  --name $SUBNET_NAME \
+  --delegations Microsoft.DataMigration/services
 
-```bash
-SUBNET_ID="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Network/virtualNetworks/$VNET_NAME/subnets/$SUBNET_NAME"
-```
+# Get subnet ID
+SUBNET_ID=$(az network vnet subnet show \
+  --resource-group $RESOURCE_GROUP \
+  --vnet-name $VNET_NAME \
+  --name $SUBNET_NAME \
+  --query id -o tsv)
 
-#### 🏗️ Create Azure DMS Instance
+# Register provider
+az provider register --namespace Microsoft.DataMigration --wait
 
-```bash
+# Create DMS instance
 az dms create \
-  --location "$LOCATION" \
-  --name dms-demo \
-  --resource-group "$RESOURCE_GROUP" \
-  --sku-name "Standard_2vCores" \
-  --subnet "$SUBNET_ID"
-```
-
-#### 📂 Create DMS project using REST API
-
-```bash
-az rest --method PUT \
-  --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.DataMigration/services/$DMS_NAME/projects/$PROJECT_NAME?api-version=2022-03-30-preview" \
-  --body "{\"location\": \"$LOCATION\", \"properties\": {\"sourcePlatform\": \"SQL\", \"targetPlatform\": \"SQLDB\"}}" \
-  --headers "Content-Type=application/json"
-```
-
-#### 🚚 Create DMS Migration Task
-
-```bash
-az datamigration sql-db create \
-  --resource-group "$RESOURCE_GROUP" \
-  --sqldb-instance-name "$SQL_SERVER_NAME" \
-  --target-db-name "$SQL_DB_NAME" \
-  --migration-service "$MIGRATION_SERVICE_ID" \
-  --scope "$SQL_SCOPE" \
-  --source-database-name "$SQL_DB_NAME" \
-  --source-sql-connection authentication="SqlAuthentication" data-source="sqlsource" user-name="$SQL_SA_USER" password="$SQL_SA_PASSWORD" encrypt-connection=true trust-server-certificate=true \
-  --target-sql-connection authentication="SqlAuthentication" data-source="$SQL_SERVER_NAME.database.windows.net" user-name="$SQL_MI_ADMIN_USER" password="$SQL_MI_PASSWORD" encrypt-connection=true trust-server-certificate=true
+  --location $LOCATION \
+  --name $DMS_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --sku-name Standard_2vCores \
+  --subnet $SUBNET_ID
 ```
 
 ---
 
-## 🔍 Step 4: Post Migration Testing (Validate Migration Using `sqlcmd`)
+## 📂 Step 4: Create Project and Task
 
-#### 🚪 Login to Azure SQL Managed Instance
+```bash
+# Create migration project
+az rest --method PUT \
+  --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.DataMigration/services/$DMS_NAME/projects/$PROJECT_NAME?api-version=2022-03-30-preview" \
+  --body "{\"location\": \"$LOCATION\", \"properties\": {\"sourcePlatform\": \"SQL\", \"targetPlatform\": \"SQLDB\"}}" \
+  --headers "Content-Type=application/json"
+
+# Create migration task (CLI does not support Azure SQL ➞ Azure SQL directly)
+# Use Portal UI to finish the last step: selecting source/target and starting migration.
+```
+
+---
+
+## 🔍 Step 5: Validate in Target Server
 
 ```bash
 docker run --rm -it mcr.microsoft.com/mssql-tools \
-  sqlcmd -S ${SQL_MI_NAME}.public.australiaeast.database.windows.net \
-  -U sqladmin \
-  -P "$SQL_MI_PASSWORD" \
-  -d MyDatabase
+  sqlcmd -S ${SQL_TARGET_NAME}.database.windows.net \
+  -U $SQL_ADMIN_USER -P $SQL_ADMIN_PASSWORD \
+  -d $SQL_DB_NAME -Q "SELECT * FROM Users;"
 ```
-
-#### 📋 Run These Queries in `sqlcmd`
-
-```sql
-SELECT COUNT(*) FROM Users;
-GO
-
-SELECT TOP 5 * FROM Users;
-GO
-
-EXIT
-```
-
-### ✅ Validation Checklist
-
-| Item                 | Expected Outcome   |
-|----------------------|--------------------|
-| Table `Users` exists | ✅                 |
-| Row count            | 2 rows             |
-| Data consistency     | Alice, Bob present |
-| Schema match         | Same as source     |
 
 ---
 
@@ -239,12 +179,12 @@ EXIT
 
 | Component      | Description                            |
 |----------------|----------------------------------------|
-| **Source**     | SQL Server 2019 running in Docker      |
-| **Target**     | Azure SQL Managed Instance             |
+| **Source**     | Azure SQL Server (demo data)           |
+| **Target**     | Azure SQL Server (empty DB)            |
 | **Tool**       | Azure Database Migration Service (DMS) |
-| **Method**     | Online migration                       |
-| **Validation** | `sqlcmd` CLI (Docker)                  |
+| **Method**     | Online migration (Azure ➞ Azure)       |
+| **Validation** | `sqlcmd` in Docker                     |
 
 ---
 
-🚀 This lab simulates real-world **hybrid cloud migration** using **Azure-native services** with built-in support for **online migrations**. For more complex scenarios, consider exploring **Azure Migrate** and other advanced features of **Azure DMS**.
+🚀 This updated lab provides a 100% Azure-native, network-compatible, and DMS-supported demo without relying on local containers or hybrid setups.
