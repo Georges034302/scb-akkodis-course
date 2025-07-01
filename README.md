@@ -180,16 +180,16 @@ A storage account and container are deployed with a time-based WORM policy (2555
 <details>
 <summary><strong>Session 5 - Demo</strong> (click to expand/hide)</summary>
 
-### 🧪 Hands-On Lab: Azure DMS Migration – SQL Server (Docker) to Azure SQL Managed Instance
+### 🛠️ Azure DMS Migration Demo: Azure SQL ➞ Azure SQL
 
 #### 🏷️ Lab Title
-Online Migration from On-Premises SQL Server (Docker) to Azure SQL Managed Instance using Azure Database Migration Service (DMS)
+Online Migration from Azure SQL Server to Azure SQL Server using Azure Database Migration Service (DMS)
 
 #### 🎯 Lab Objective
-Simulate a real-world **online migration** from a local SQL Server (running in Docker) to Azure SQL Managed Instance (MI) using Azure DMS, with all steps performed via Azure CLI and JSON configuration files.
+Demonstrate a **complete online migration** of a SQL Server database from one Azure SQL Server to another using Azure Database Migration Service (DMS), with all steps performed via Azure CLI and REST API.
 
 #### ✅ Lab Scenario
-You are tasked with migrating a production SQL Server database to Azure SQL MI. The source is simulated using a Docker container. The migration must be automated, auditable, and validated using CLI and SQL queries.
+You are tasked with migrating a production database from a source Azure SQL Server to a target Azure SQL Server. The migration must be automated, auditable, and validated using CLI and SQL queries.
 
 ---
 
@@ -197,23 +197,25 @@ You are tasked with migrating a production SQL Server database to Azure SQL MI. 
 
 | Setup Step | Description                                                      |
 |------------|------------------------------------------------------------------|
-| 1          | Prepare Docker SQL Server as the source                          |
-| 2          | Define source, target, and database options JSON config files    |
-| 3          | Create Azure DMS instance, migration project, and migration task |
-| 4          | Monitor migration and validate results in Azure SQL MI           |
+| 1          | Create and populate the source Azure SQL Server and database     |
+| 2          | Create the target Azure SQL Server and empty database            |
+| 3          | Provision Azure DMS and required networking                      |
+| 4          | Create DMS migration project and task                            |
+| 5          | Validate migration in the target Azure SQL Server                |
 
 | Validation Step | Description                                    |
 |-----------------|------------------------------------------------|
-| 1               | Connect to Azure SQL MI and validate data      |
+| 1               | Connect to target Azure SQL Server and validate data |
 | 2               | Confirm schema and row count match source      |
 | 3               | Review DMS migration status and logs           |
 
 | Expected Outcome | Description                                   |
 |------------------|-----------------------------------------------|
-| 1                | Docker SQL Server simulates on-premises source|
-| 2                | Azure SQL MI receives data via DMS migration  |
-| 3                | CLI automates full workflow                   |
-| 4                | Manual or scripted query confirms migration   |
+| 1                | Source Azure SQL Server is populated with demo data |
+| 2                | Target Azure SQL Server receives data via DMS migration |
+| 3                | CLI and REST automate the full migration workflow |
+| 4                | SQL queries confirm data and schema integrity |
+
 
 </details>
 
