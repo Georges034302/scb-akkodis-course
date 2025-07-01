@@ -134,8 +134,14 @@ SUBNET_ID=$(az network vnet subnet show \
   --vnet-name $VNET_NAME \
   --name $SUBNET_NAME \
   --query id -o tsv)
+```
 
-# Register provider
+---
+
+## 🛡️ Step 4: Register Provider and Create DMS Instance
+
+```bash
+# Register Microsoft.DataMigration provider
 az provider register --namespace Microsoft.DataMigration --wait
 
 # Create DMS instance
@@ -149,7 +155,7 @@ az dms create \
 
 ---
 
-## 📂 Step 4: Create Project and Task
+## 📂 Step 5: Create Migration Project and Task
 
 ```bash
 # Create migration project
@@ -158,13 +164,36 @@ az rest --method PUT \
   --body "{\"location\": \"$LOCATION\", \"properties\": {\"sourcePlatform\": \"SQL\", \"targetPlatform\": \"SQLDB\"}}" \
   --headers "Content-Type=application/json"
 
-# Create migration task (CLI does not support Azure SQL ➞ Azure SQL directly)
-# Use Portal UI to finish the last step: selecting source/target and starting migration.
+# ✅ Verify the project was created
+az rest --method GET \
+  --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.DataMigration/services/$DMS_NAME/projects?api-version=2022-03-30-preview" \
+  --query "value[].name"
+
+# Create migration task
+# Note: The Azure CLI does not support Azure SQL ➞ Azure SQL migration tasks directly.
+# Use the Azure Portal UI to finish the last step: selecting source/target and starting migration.
 ```
+---
+
+## 🔍 Step 6: 🚧 Create Migration Task — Requires Azure Portal
+
+⚠️ **The Azure CLI does not support creating SQL ➞ SQL DMS tasks. You must use the Azure Portal to finish the migration:**
+
+### 👉 Steps in Portal:
+
+1. Go to your Azure DMS instance (`$DMS_NAME`) in the Portal.
+2. Under **Projects**, click your project (`$PROJECT_NAME`).
+3. Click **+ New Activity** → **Online data migration**.
+4. Fill in the following:
+    - **Source server name:** `sqlsource.database.windows.net`
+    - **Target server name:** `sqltarget.database.windows.net`
+    - **Authentication:** Use `SQL_ADMIN_USER` / `SQL_ADMIN_PASSWORD` from your `.env`
+    - **Database name:** `$SQL_DB_NAME` from your `.env`
+5. Select `SQL_DB_NAME` from your `.env` and start the migration.
 
 ---
 
-## 🔍 Step 5: Validate in Target Server
+## 🔍 Step 7: Validate in Target Server
 
 ```bash
 docker run --rm -it mcr.microsoft.com/mssql-tools \
