@@ -245,7 +245,7 @@ In the Storage account IAM:
 az storage blob upload \
   --account-name "$STORAGE_NAME" \
   --container-name "$STORAGE_CONTAINER" \
-  --name "$BACKUP_FOLDER/placeholder.txt" \
+  --name "$BACKUP_FOLDER/placeholder.bak" \
   --file /dev/null \
   --auth-mode login
 echo "✅ Placeholder file uploaded."
