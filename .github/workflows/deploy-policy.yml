@@ -29,7 +29,10 @@ jobs:
         run: |
           az policy definition create \
             --name allowed-locations \
-            --policy session6/definitions/allowedLocations/policy.json
+            --rules @session6/definitions/allowedLocations/policy.json \
+            --mode All \
+            --display-name "Allowed Locations - Australia East Only" \
+            --description "Only allow resources in australiaeast."
 
       - name: Assign Policy via Bicep
         run: |

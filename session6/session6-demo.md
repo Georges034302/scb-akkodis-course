@@ -113,7 +113,10 @@ jobs:
         run: |
           az policy definition create \
             --name allowed-locations \
-            --policy session6/definitions/allowedLocations/policy.json
+            --rules @session6/definitions/allowedLocations/policy.json \
+            --mode All \
+            --display-name "Allowed Locations - Australia East Only" \
+            --description "Only allow resources in australiaeast."
 
       - name: Assign Policy via Bicep
         run: |
@@ -121,6 +124,7 @@ jobs:
             --location australiaeast \
             --template-file session6/assignments/assign-aue-prod.bicep \
             --name assign-location-policy
+
 ```
 
 Push all files to `main` branch to trigger CI/CD.
