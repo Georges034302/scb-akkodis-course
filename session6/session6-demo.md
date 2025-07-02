@@ -156,31 +156,63 @@ Push all files to `main` branch to trigger CI/CD.
 
 - **Check policy compliance status in Azure CLI:**
   ```bash
+  az policy assignment list \
+    --query "[?displayName=='enforce-aue-only' || name=='enforce-aue-only'].{name:name, displayName:displayName, id:id}"
+  ```
+  *Purpose: Confirm the policy assignment exists and get its details.*
+
+- **Check policy state and compliance:**
+  ```bash
   az policy state list \
-    --policy-assignment-name enforce-aue-only \
+    --filter "PolicyAssignmentName eq 'enforce-aue-only'" \
     --query "[].{resource:resourceId, compliance:complianceState}"
   ```
-  *Purpose: Identify which resources comply or do not comply with the policy.*
-
-- **Query assignment change history in Azure Activity Logs (Azure Portal → Monitor → Logs):**
-  ```kql
-  AzureActivity
-  | where OperationNameValue contains "Microsoft.Authorization/policyAssignments/write"
-  | project TimeGenerated, Caller, ResourceGroup, ActivityStatus, Properties
-  ```
-  *Purpose: Review historical changes to policy assignments for auditing or troubleshooting.*
+  *Purpose: Review which resources are compliant or non-compliant with the policy.*
 
 ---
 
-## 📝 Step 6: Summary
+## 🗑️ Step 6: Cleanup - Remove Policy Assignment and Definition
+
+- **Remove the policy assignment:**
+  ```bash
+  az policy assignment delete \
+    --name enforce-aue-only
+  ```
+  *Purpose: Remove the policy assignment from the subscription scope.*
+
+- **Remove the custom policy definition:**
+  ```bash
+  az policy definition delete \
+    --name allowed-locations
+  ```
+  *Purpose: Delete the custom policy definition from the subscription.*
+
+- **Verify removal:**
+  ```bash
+  # verify aue enfored policy is removed
+  az policy assignment list \
+    --query "[?name=='enforce-aue-only']" \
+    --output table
+  
+  # verify allowed locations policy is removed
+  az policy definition list \
+    --query "[?name=='allowed-locations']" \
+    --output table
+  ```
+  *Purpose: Confirm both the assignment and definition have been removed.*
+
+---
+
+## 📝 Step 7: Summary
 
 | Component      | Description                             |
 | -------------- | --------------------------------------- |
-| **Policy**     | Restrict deployments to `australiaeast` |
-| **Bicep**      | Assignment logic as code                |
-| **CI/CD**      | GitHub Actions to deploy policy + Bicep |
-| **Governance** | PR approval enforced via branch rules   |
-| **Monitoring** | Compliance checked in Policy + Sentinel |
+| **Policy Definition** | JSON-based custom policy restricting deployments to `australiaeast` |
+| **Bicep Template** | Assignment logic as Infrastructure as Code |
+| **CI/CD Pipeline** | GitHub Actions to deploy policy definition and assignment |
+| **Validation** | Azure Portal verification and CLI testing |
+| **Monitoring** | Policy compliance tracking via Azure CLI |
+| **Cleanup** | Removal of assignments and definitions |
 
 ---
 
