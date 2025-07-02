@@ -89,7 +89,10 @@ on:
     branches: [ main ]
     paths:
       - 'session6/**'
-
+permissions:
+  id-token: write
+  contents: read
+  
 jobs:
   deploy:
     runs-on: ubuntu-latest
