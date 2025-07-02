@@ -5,6 +5,8 @@ on:
     branches: [ main ]
     paths:
       - 'session6/**'
+      - 'session6/definitions/**'
+      - 'session6/assignments/**'
 
 permissions:
   id-token: write
