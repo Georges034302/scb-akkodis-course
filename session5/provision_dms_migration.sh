@@ -13,15 +13,6 @@ else
   exit 1
 fi
 
-# Validate required .env variables
-echo "🔎 Validating required environment variables..."
-for var in RESOURCE_GROUP LOCATION SQL_SERVER_NAME DMS_NAME PROJECT_NAME TASK_NAME SQL_SA_USER SQL_SA_PASSWORD SQL_MI_ADMIN_USER SQL_MI_PASSWORD SQL_DB_NAME MIGRATION_SERVICE_ID SQL_SCOPE; do
-  if [ -z "${!var}" ]; then
-    echo "❌ Missing $var in .env. Run ./init_env.sh first."
-    exit 1
-  fi
-done
-
 # Register Microsoft.DataMigration provider
 echo "🛡️ Registering Microsoft.DataMigration provider..."
 az provider register --namespace Microsoft.DataMigration --wait

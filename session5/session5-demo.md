@@ -2,6 +2,10 @@
 
 ---
 
+<table>
+<tr>
+<td>
+
 ## 🎯 Objectives
 
 This hands-on lab demonstrates a **complete online migration** of a SQL Server database from **one Azure SQL Server** to another using **Azure Database Migration Service (DMS)**.
@@ -14,6 +18,16 @@ By completing this lab, you will:
 - Execute the migration using CLI and REST API.
 - Validate the migration using `sqlcmd`.
 
+</td>
+<td>
+
+<img src="dms.png" alt="DMS Diagram" width="400"/>
+
+</td>
+</tr>
+</table>
+
+
 ---
 
 ## ✅ Prerequisites
@@ -25,21 +39,57 @@ Ensure the following are available:
 - Docker installed (for `sqlcmd` container usage)
 
 ---
+---
 
-## 🧱 Step 1: Create Source SQL Server & Populate Database
+## 🌐 Step 1: Provision DMS Infracstructure (VNet and Subnet)
 
 ```bash
 # Variables
 RESOURCE_GROUP="rg-dms-demo"
 LOCATION="australiaeast"
+VNET_NAME="dms-vnet"
+SUBNET_NAME="dms-subnet"
+DMS_NAME="dms-demo"
+SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+# Create resource group
+az group create --name $RESOURCE_GROUP --location $LOCATION
+
+# Create VNet and delegated subnet
+az network vnet create \
+  --name $VNET_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --location $LOCATION \
+  --address-prefixes 10.10.0.0/16 \
+  --subnet-name $SUBNET_NAME \
+  --subnet-prefixes 10.10.1.0/24
+
+# Delegate subnet to Microsoft.DataMigration
+az network vnet subnet update \
+  --resource-group $RESOURCE_GROUP \
+  --vnet-name $VNET_NAME \
+  --name $SUBNET_NAME \
+  --delegations Microsoft.DataMigration/services
+
+# Get subnet ID
+SUBNET_ID=$(az network vnet subnet show \
+  --resource-group $RESOURCE_GROUP \
+  --vnet-name $VNET_NAME \
+  --name $SUBNET_NAME \
+  --query id -o tsv)
+```
+
+---
+
+## 🧱 Step 2: Create Source SQL Server & Populate Database
+
+```bash
+# Variables
 SQL_SOURCE_NAME="sqlsource$RANDOM"
 SQL_TARGET_NAME="sqltarget$RANDOM"
 SQL_ADMIN_USER="sqladmin"
 SQL_ADMIN_PASSWORD="P@ssw0rd$RANDOM"
-SQL_DB_NAME="MyDatabase"
-
-# Create resource group
-az group create --name $RESOURCE_GROUP --location $LOCATION
+SQL_DB_NAME="sqldb$(date +%s%N | sha256sum | head -c 8)"
 
 # Create source SQL Server
 az sql server create \
@@ -73,7 +123,7 @@ docker run --rm mcr.microsoft.com/mssql-tools \
 
 ---
 
-## ☁️ Step 2: Prepare Target SQL Server
+## ☁️ Step 3: Prepare Target SQL Server
 
 ```bash
 # Create target SQL Server
@@ -98,42 +148,6 @@ az sql server firewall-rule create \
   --name AllowAllAzureIPs \
   --start-ip-address 0.0.0.0 \
   --end-ip-address 0.0.0.0
-```
-
----
-
-## 🌐 Step 3: Provision DMS + VNet
-
-```bash
-VNET_NAME="dms-vnet"
-SUBNET_NAME="dms-subnet"
-DMS_NAME="dms-demo"
-PROJECT_NAME="sqlmig-project"
-TASK_NAME="sqlmig-task"
-SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-
-# Create VNet and delegated subnet
-az network vnet create \
-  --name $VNET_NAME \
-  --resource-group $RESOURCE_GROUP \
-  --location $LOCATION \
-  --address-prefixes 10.10.0.0/16 \
-  --subnet-name $SUBNET_NAME \
-  --subnet-prefixes 10.10.1.0/24
-
-# Delegate subnet to Microsoft.DataMigration
-az network vnet subnet update \
-  --resource-group $RESOURCE_GROUP \
-  --vnet-name $VNET_NAME \
-  --name $SUBNET_NAME \
-  --delegations Microsoft.DataMigration/services
-
-# Get subnet ID
-SUBNET_ID=$(az network vnet subnet show \
-  --resource-group $RESOURCE_GROUP \
-  --vnet-name $VNET_NAME \
-  --name $SUBNET_NAME \
-  --query id -o tsv)
 ```
 
 ---
