@@ -36,7 +36,11 @@ jobs:
 
       - name: Assign Policy via Bicep
         run: |
+          POLICY_DEF_ID=$(az policy definition show --name allowed-locations --query id -o tsv)
+
           az deployment sub create \
             --location australiaeast \
             --template-file session6/assignments/assign-aue-prod.bicep \
+            --parameters policyDefinitionId=$POLICY_DEF_ID \
             --name assign-location-policy
+

@@ -1,4 +1,6 @@
-param policyDefinitionId string = resourceId('Microsoft.Authorization/policyDefinitions', 'allowed-locations')
+targetScope = 'subscription'
+
+param policyDefinitionId string
 
 resource policyAssignment 'Microsoft.Authorization/policyAssignments@2021-06-01' = {
   name: 'enforce-aue-only'
