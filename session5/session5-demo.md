@@ -86,26 +86,26 @@ az group create --name $RESOURCE_GROUP --location $LOCATION
 
 # Create VNet and delegated subnet
 az network vnet create \
-  --name $VNET_NAME \
-  --resource-group $RESOURCE_GROUP \
-  --location $LOCATION \
-  --address-prefixes 10.10.0.0/16 \
-  --subnet-name $SUBNET_NAME \
-  --subnet-prefixes 10.10.1.0/24
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$VNET_NAME" \
+  --location "$LOCATION" \
+  --address-prefix 10.10.0.0/16 \
+  --subnet-name "$SUBNET_NAME" \
+  --subnet-prefix 10.10.1.0/24
 
 # Delegate subnet to Microsoft.DataMigration
 az network vnet subnet update \
-  --resource-group $RESOURCE_GROUP \
-  --vnet-name $VNET_NAME \
-  --name $SUBNET_NAME \
+  --resource-group "$RESOURCE_GROUP" \
+  --vnet-name "$VNET_NAME" \
+  --name "$SUBNET_NAME" \
   --delegations Microsoft.DataMigration/services
 
 # Get subnet ID
 SUBNET_ID=$(az network vnet subnet show \
-  --resource-group $RESOURCE_GROUP \
-  --vnet-name $VNET_NAME \
-  --name $SUBNET_NAME \
-  --query id -o tsv)
+  --resource-group "$RESOURCE_GROUP" \
+  --vnet-name "$VNET_NAME" \
+  --name "$SUBNET_NAME" \
+  --query "id" -o tsv)
 ```
 
 ---
@@ -115,39 +115,40 @@ SUBNET_ID=$(az network vnet subnet show \
 ```bash
 # Create source SQL Server
 az sql server create \
-  --name $SQL_SOURCE_NAME \
-  --resource-group $RESOURCE_GROUP \
-  --location $LOCATION \
-  --admin-user $SQL_ADMIN_USER \
-  --admin-password $SQL_ADMIN_PASSWORD
+  --name "$SQL_SOURCE_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --location "$LOCATION" \
+  --admin-user "$SQL_ADMIN_USER" \
+  --admin-password "$SQL_ADMIN_PASSWORD"
 
 # Create source DB
 az sql db create \
-  --resource-group $RESOURCE_GROUP \
-  --server $SQL_SOURCE_NAME \
-  --name $SQL_DB_NAME \
+  --resource-group "$RESOURCE_GROUP" \
+  --server "$SQL_SOURCE_NAME" \
+  --name "$SQL_DB_NAME" \
   --service-objective S0
 
 # Allow Azure services to access
 az sql server firewall-rule create \
-  --resource-group $RESOURCE_GROUP \
-  --server $SQL_SOURCE_NAME \
+  --resource-group "$RESOURCE_GROUP" \
+  --server "$SQL_SOURCE_NAME" \
   --name AllowAllAzureIPs \
   --start-ip-address 0.0.0.0 \
   --end-ip-address 0.0.0.0
 
 # Insert data
 docker run --rm mcr.microsoft.com/mssql-tools \
-  /opt/mssql-tools/bin/sqlcmd -S "${SQL_SOURCE_NAME}.database.windows.net" \
+  /opt/mssql-tools/bin/sqlcmd -S "$SQL_SOURCE_NAME.database.windows.net" \
   -U "$SQL_ADMIN_USER" -P "$SQL_ADMIN_PASSWORD" \
-  -d "$SQL_DB_NAME" -Q "CREATE TABLE Users (id INT, name NVARCHAR(50)); INSERT INTO Users VALUES (1,'Alice'), (2,'Bob');"
+  -d "$SQL_DB_NAME" \
+  -Q "CREATE TABLE Users (id INT, name NVARCHAR(50)); INSERT INTO Users VALUES (1,'Alice'), (2,'Bob');"
 
 # Verify inserted data
 docker run --rm mcr.microsoft.com/mssql-tools \
-  /opt/mssql-tools/bin/sqlcmd -S "${SQL_SOURCE_NAME}.database.windows.net" \
+  /opt/mssql-tools/bin/sqlcmd -S "$SQL_SOURCE_NAME.database.windows.net" \
   -U "$SQL_ADMIN_USER" -P "$SQL_ADMIN_PASSWORD" \
-  -d "$SQL_DB_NAME" -Q "SELECT * FROM Users;"
-
+  -d "$SQL_DB_NAME" \
+  -Q "SELECT * FROM Users;"
 ```
 
 ---
@@ -157,23 +158,23 @@ docker run --rm mcr.microsoft.com/mssql-tools \
 ```bash
 # Create target SQL Server
 az sql server create \
-  --name $SQL_TARGET_NAME \
-  --resource-group $RESOURCE_GROUP \
-  --location $LOCATION \
-  --admin-user $SQL_ADMIN_USER \
-  --admin-password $SQL_ADMIN_PASSWORD
+  --name "$SQL_TARGET_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --location "$LOCATION" \
+  --admin-user "$SQL_ADMIN_USER" \
+  --admin-password "$SQL_ADMIN_PASSWORD"
 
 # Create empty target DB
 az sql db create \
-  --resource-group $RESOURCE_GROUP \
-  --server $SQL_TARGET_NAME \
-  --name $SQL_DB_NAME \
+  --resource-group "$RESOURCE_GROUP" \
+  --server "$SQL_TARGET_NAME" \
+  --name "$SQL_DB_NAME" \
   --service-objective S0
 
 # Allow Azure access
 az sql server firewall-rule create \
-  --resource-group $RESOURCE_GROUP \
-  --server $SQL_TARGET_NAME \
+  --resource-group "$RESOURCE_GROUP" \
+  --server "$SQL_TARGET_NAME" \
   --name AllowAllAzureIPs \
   --start-ip-address 0.0.0.0 \
   --end-ip-address 0.0.0.0
