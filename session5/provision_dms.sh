@@ -33,15 +33,15 @@ run_with_timer bash -c "
 "
 echo "✅ DMS instance created."
 
-# Create migration project (Target: SQLMI)
-echo "📂 Creating migration project targeting SQL Managed Instance..."
+# Create migration project (Target: SQLDB)
+echo "📂 Creating migration project targeting Azure SQL Database..."
 az rest --method PUT \
   --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.DataMigration/services/$DMS_NAME/projects/$PROJECT_NAME?api-version=2022-03-30-preview" \
   --body "{
     \"location\": \"$LOCATION\",
     \"properties\": {
       \"sourcePlatform\": \"SQL\",
-      \"targetPlatform\": \"SQLMI\"
+      \"targetPlatform\": \"SQLDB\"
     }
   }" \
   --headers "Content-Type=application/json"

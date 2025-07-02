@@ -19,7 +19,7 @@ echo "🔑 Generating randomized values..."
 RESOURCE_GROUP="rg-dms-demo"
 LOCATION="australiaeast"
 SQL_SOURCE_NAME="sqlsource$RANDOM"
-SQL_TARGET_NAME="sqlmi$RANDOM"  # This is your Azure SQL MI
+SQL_TARGET_NAME="sqltarget$RANDOM"  # Azure SQL DB target
 SQL_ADMIN_USER="sqladmin"
 SQL_ADMIN_PASSWORD="P@ssw0rd$RANDOM"
 SQL_DB_NAME="sqldb$(date +%s%N | sha256sum | head -c 8)"
@@ -30,8 +30,6 @@ PROJECT_NAME="sqlmig-project"
 TASK_NAME="sqlmig-task"
 SQL_SA_USER="$SQL_ADMIN_USER"
 SQL_SA_PASSWORD="$SQL_ADMIN_PASSWORD"
-SQL_MI_ADMIN_USER="$SQL_ADMIN_USER"
-SQL_MI_PASSWORD="$SQL_ADMIN_PASSWORD"
 
 # Get subscription ID
 echo "🔍 Getting subscription ID..."
@@ -70,8 +68,6 @@ export SQL_ADMIN_USER=$SQL_ADMIN_USER
 export SQL_ADMIN_PASSWORD=$SQL_ADMIN_PASSWORD
 export SQL_SA_USER=$SQL_SA_USER
 export SQL_SA_PASSWORD=$SQL_SA_PASSWORD
-export SQL_MI_ADMIN_USER=$SQL_MI_ADMIN_USER
-export SQL_MI_PASSWORD=$SQL_MI_PASSWORD
 export SQL_DB_NAME=$SQL_DB_NAME
 export VNET_NAME=$VNET_NAME
 export SUBNET_NAME=$SUBNET_NAME

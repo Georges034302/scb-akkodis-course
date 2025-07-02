@@ -47,7 +47,7 @@ docker run --rm mcr.microsoft.com/mssql-tools \
   /opt/mssql-tools/bin/sqlcmd -S "${SQL_SOURCE_NAME}.database.windows.net" \
   -U "$SQL_ADMIN_USER" -P "$SQL_ADMIN_PASSWORD" \
   -d "$SQL_DB_NAME" \
-  -Q "CREATE TABLE Users (id INT, name NVARCHAR(50)); INSERT INTO Users VALUES (1,'Alice'), (2,'Bob');"
+  -Q "CREATE TABLE Users (id INT PRIMARY KEY, name NVARCHAR(50)); INSERT INTO Users VALUES (1,'Alice'), (2,'Bob');"
 echo "✅ Demo data inserted."
 
 # Verify demo data

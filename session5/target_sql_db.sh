@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🏗️ Provisioning target Azure SQL Managed Instance (SQL MI)..."
+echo "🏗️ Provisioning target Azure SQL Server and Database (PaaS)..."
 sleep 1
 
 # Load environment variables
@@ -13,20 +13,33 @@ else
   exit 1
 fi
 
-# Create SQL Managed Instance (can take up to an hour)
-echo "🛠️ Creating SQL MI: $SQL_TARGET_NAME ..."
-az sql mi create \
+# Create target SQL Server
+echo "🛠️ Creating Azure SQL Server: $SQL_TARGET_NAME ..."
+az sql server create \
   --name "$SQL_TARGET_NAME" \
   --resource-group "$RESOURCE_GROUP" \
   --location "$LOCATION" \
-  --admin-user "$SQL_MI_ADMIN_USER" \
-  --admin-password "$SQL_MI_PASSWORD" \
-  --subnet-id "$SUBNET_ID" \
-  --license-type BasePrice \
-  --edition GeneralPurpose \
-  --family Gen5 \
-  --vcores 4 \
-  --storage-size 64GB
+  --admin-user "$SQL_ADMIN_USER" \
+  --admin-password "$SQL_ADMIN_PASSWORD"
+echo "✅ Azure SQL Server created."
 
-echo "✅ SQL Managed Instance provisioning started (may take up to 1 hour)."
-echo "📌 You can monitor progress in the Azure Portal."
+# Create target database
+echo "📂 Creating target database: $SQL_DB_NAME ..."
+az sql db create \
+  --resource-group "$RESOURCE_GROUP" \
+  --server "$SQL_TARGET_NAME" \
+  --name "$SQL_DB_NAME" \
+  --service-objective S0
+echo "✅ Target database created."
+
+# Allow Azure services to access
+echo "🌐 Creating firewall rule to allow Azure services to access target..."
+az sql server firewall-rule create \
+  --resource-group "$RESOURCE_GROUP" \
+  --server "$SQL_TARGET_NAME" \
+  --name AllowAllAzureIPs \
+  --start-ip-address 0.0.0.0 \
+  --end-ip-address 0.0.0.0
+echo "✅ Firewall rule applied to target server."
+
+echo "🎉 Target Azure SQL Server and database setup completed successfully."
