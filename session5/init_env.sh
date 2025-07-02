@@ -42,9 +42,13 @@ DMS_NAME="dms-demo"
 PROJECT_NAME="sqlmig-project"
 TASK_NAME="sqlmig-task"
 
-# Get subscription and subnet ID
+# Get subscription ID
 echo "🔍 Getting subscription ID..."
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+# Create resource group
+echo "📁 Creating resource group: $RESOURCE_GROUP ..."
+az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
 
 # Create VNet and Subnet
 echo "🌐 Creating VNet and Subnet for DMS..."
