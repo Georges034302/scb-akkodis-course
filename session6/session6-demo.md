@@ -92,7 +92,7 @@ on:
 permissions:
   id-token: write
   contents: read
-  
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -126,20 +126,7 @@ Push all files to `main` branch to trigger CI/CD.
 
 ---
 
-## 🔑 Step 4: Enforce Pull Request Approval
-
-1. Go to your **GitHub Repo → Settings → Branches**
-2. Add a **Branch Protection Rule** for `main`
-3. Enable:
-   - Require pull request reviews before merging
-   - Require status checks (e.g., lint, validate)
-   - Limit who can push to `main`
-
-This ensures governance teams must approve policy changes.
-
----
-
-## 🔄 Step 5: Validate in Azure Portal
+## 🔄 Step 4: Validate in Azure Portal
 
 1. Go to **Azure Portal → Policy → Definitions** to confirm policy appears
 2. Navigate to **Policy → Assignments**
@@ -148,7 +135,7 @@ This ensures governance teams must approve policy changes.
 
 ---
 
-## 🔢 Step 6: Monitor Assignment and Drift
+## 🔢 Step 5: Monitor Assignment and Drift
 
 ### Optional: Run in Azure CLI
 
@@ -160,15 +147,13 @@ az policy state list \
 
 ### Optional: Configure Sentinel Rule
 
-1. Use `AzureActivity` table to detect policy assignment changes:
+Use `AzureActivity` table to detect policy assignment changes:
 
 ```kql
 AzureActivity
 | where OperationNameValue contains "Microsoft.Authorization/policyAssignments/write"
 | project TimeGenerated, Caller, ResourceGroup, ActivityStatus, Properties
 ```
-
-2. Create an **Analytics Rule** to alert GRC or trigger a remediation playbook
 
 ---
 
