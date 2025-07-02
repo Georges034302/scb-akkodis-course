@@ -64,6 +64,7 @@ gh secret set AZURE_CLIENT_ID -b"$AZ_CLIENT_ID"
 gh secret set AZURE_TENANT_ID -b"$AZ_TENANT_ID"
 gh secret set AZURE_SUBSCRIPTION_ID -b"$AZ_SUBSCRIPTION_ID"
 
+
 echo ""
 echo "✅ All Azure OIDC secrets set in your GitHub repo!"
 echo "--------------------------------------------------"
@@ -71,5 +72,19 @@ echo "AZURE_CLIENT_ID: $AZ_CLIENT_ID"
 echo "AZURE_TENANT_ID: $AZ_TENANT_ID"
 echo "AZURE_SUBSCRIPTION_ID: $AZ_SUBSCRIPTION_ID"
 echo "OIDC Federated Credential created for $REPO"
+echo ""
+
+echo "🔧 Assigning Contributor role to the service principal ..."
+az role assignment create \
+  --assignee "$AZ_CLIENT_ID" \
+  --role "Contributor" \
+  --scope "/subscriptions/$AZ_SUBSCRIPTION_ID"
+
+echo "🔧 Assigning Resource Policy Contributor role to the service principal ..."
+az role assignment create \
+  --assignee "$AZ_CLIENT_ID" \
+  --role "Resource Policy Contributor" \
+  --scope "/subscriptions/$AZ_SUBSCRIPTION_ID"
+  
 echo ""
 echo "You are now fully ready to run passwordless Azure deployments from GitHub Actions!"
