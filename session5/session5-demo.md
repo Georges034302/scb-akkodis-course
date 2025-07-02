@@ -42,6 +42,50 @@ Ensure the following are available:
 ## 🔧 Step 0: Set Required Variables
 
 ```bash
+# 🛠️ Azure DMS Migration Demo: Azure SQL ➞ Azure SQL VM (Offline)
+
+---
+
+<table>
+<tr>
+<td>
+
+## 🎯 Objectives
+
+This hands-on lab demonstrates a **complete offline migration** of a SQL Server database from one **Azure SQL Server (PaaS)** to an **Azure SQL Virtual Machine (IaaS)** using **Azure Database Migration Service (DMS)**.
+
+By completing this lab, you will:
+
+- Create a source Azure SQL Server and populate it with data.
+- Create a target Azure SQL Virtual Machine and empty database.
+- Provision Azure DMS with required networking.
+- Execute the migration using Azure Portal + REST API.
+- Validate the migration using `sqlcmd`.
+
+</td>
+<td>
+
+<img src="https://github.com/user-attachments/assets/cef9c11e-8c64-4e3d-b10e-a8ec0069c85c" alt="DMS Diagram" width="900"/>
+
+</td>
+</tr>
+</table>
+
+---
+
+## ✅ Prerequisites
+
+Ensure the following are available:
+
+- Active Azure Subscription
+- Azure CLI installed and authenticated (`az login`)
+- Docker installed (for `sqlcmd` container usage)
+
+---
+
+## 🔧 Step 0: Set Required Variables
+
+```bash
 # Set Azure region and resource group
 LOCATION="australiaeast"
 RESOURCE_GROUP="rg-dms-demo"
@@ -104,7 +148,7 @@ SUBNET_ID=$(az network vnet subnet show \
 ```bash
 # Create source SQL Server
 az sql server create \
-  --name "$SQL_SOURCE_NAME" \
+  --name "$SQL_SOURCE_SERVER" \
   --resource-group "$RESOURCE_GROUP" \
   --location "$LOCATION" \
   --admin-user "$ADMIN_USER" \
@@ -113,30 +157,30 @@ az sql server create \
 # Create DB
 az sql db create \
   --resource-group "$RESOURCE_GROUP" \
-  --server "$SQL_SOURCE_NAME" \
-  --name "$SQL_DB_NAME" \
+  --server "$SQL_SOURCE_SERVER" \
+  --name "$SQL_SOURCE_DB" \
   --service-objective S0
 
 # Allow firewall access
 az sql server firewall-rule create \
   --resource-group "$RESOURCE_GROUP" \
-  --server "$SQL_SOURCE_NAME" \
+  --server "$SQL_SOURCE_SERVER" \
   --name AllowAllAzureIPs \
   --start-ip-address 0.0.0.0 \
   --end-ip-address 0.0.0.0
 
 # Insert data
 docker run --rm mcr.microsoft.com/mssql-tools \
-  /opt/mssql-tools/bin/sqlcmd -S "$SQL_SOURCE_NAME.database.windows.net" \
+  /opt/mssql-tools/bin/sqlcmd -S "$SQL_SOURCE_SERVER.database.windows.net" \
   -U "$ADMIN_USER" -P "$ADMIN_PASSWORD" \
-  -d "$SQL_DB_NAME" \
+  -d "$SQL_SOURCE_DB" \
   -Q "CREATE TABLE Users (id INT, name NVARCHAR(50)); INSERT INTO Users VALUES (1,'Alice'), (2,'Bob');"
 
 # Validate data
 docker run --rm mcr.microsoft.com/mssql-tools \
-  /opt/mssql-tools/bin/sqlcmd -S "$SQL_SOURCE_NAME.database.windows.net" \
+  /opt/mssql-tools/bin/sqlcmd -S "$SQL_SOURCE_SERVER.database.windows.net" \
   -U "$ADMIN_USER" -P "$ADMIN_PASSWORD" \
-  -d "$SQL_DB_NAME" \
+  -d "$SQL_SOURCE_DB" \
   -Q "SELECT * FROM Users;"
 ```
 
@@ -145,10 +189,6 @@ docker run --rm mcr.microsoft.com/mssql-tools \
 ## ☁️ Step 3: Deploy Target SQL Server VM (SQL Server VM for Migration)
 
 ```bash
-# --- Prompt for password (hidden input) ---
-read -s -p "🔑 Enter SQL VM admin password: " ADMIN_PASSWORD
-echo
-
 # --- Create VM ---
 az vm create \
   --resource-group "$RESOURCE_GROUP" \
@@ -171,7 +211,6 @@ az sql vm create \
 
 # --- Open SQL TCP port 1433 (optional, for DMS or remote access) ---
 az vm open-port --resource-group "$RESOURCE_GROUP" --name "$SQL_VM_NAME" --port 1433
-
 ```
 
 ## ☁️ Step 4: Setup Storage Blob for SQL backups
@@ -192,10 +231,10 @@ az storage container create \
   --auth-mode login
 echo "✅ Blob container created."
 ```
+
 #### 🔒 Add Role Permission to upload files
 
 In the Storage account IAM:
-
 - Select ➕ Add Role Assignment
 - Search and Select `Storage Blob Data Contributor`
 - Assign the role to (service principle, user, group)
@@ -250,13 +289,22 @@ Follow these steps if the CLI-based creation of the Azure Database Migration Ser
 
 ---
 
-## ✅ Step 7: Validate Target Data
+## ✅ Step 6:Post Migration Valiadation
 
 ```bash
+# Get the public IP address of the target SQL VM
+SQL_VM_PUBLIC_IP=$(az vm show \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$SQL_VM_NAME" \
+  --show-details \
+  --query publicIps \
+  -o tsv)
+
+# Connect to the target SQL VM using sqlcmd in Docker and validate migrated data
 docker run --rm mcr.microsoft.com/mssql-tools \
-  /opt/mssql-tools/bin/sqlcmd -S "$SQL_VM_NAME" \
+  /opt/mssql-tools/bin/sqlcmd -S "${SQL_VM_PUBLIC_IP},1433" \
   -U "$ADMIN_USER" -P "$ADMIN_PASSWORD" \
-  -d "$SQL_DB_NAME" \
+  -d "$SQL_SOURCE_DB" \
   -Q "SELECT * FROM Users;"
 ```
 

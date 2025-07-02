@@ -3,7 +3,6 @@ set -e
 
 echo "🗄️ Creating source Azure SQL Server and populating database..."
 
-# Load environment variables
 echo "📦 Loading environment variables from .env..."
 if [ -f .env ]; then
   source .env
@@ -12,7 +11,6 @@ else
   exit 1
 fi
 
-# Create source SQL Server
 echo "🛠️ Creating source SQL Server: $SQL_SOURCE_SERVER ..."
 az sql server create \
   --name "$SQL_SOURCE_SERVER" \
@@ -22,7 +20,6 @@ az sql server create \
   --admin-password "$ADMIN_PASSWORD"
 echo "✅ Source SQL Server created."
 
-# Create source DB
 echo "🗄️ Creating source database: $SQL_SOURCE_DB ..."
 az sql db create \
   --resource-group "$RESOURCE_GROUP" \
@@ -31,7 +28,6 @@ az sql db create \
   --service-objective S0
 echo "✅ Source database created."
 
-# Allow Azure services to access
 echo "🌐 Creating firewall rule to allow Azure services..."
 az sql server firewall-rule create \
   --resource-group "$RESOURCE_GROUP" \
@@ -41,7 +37,6 @@ az sql server firewall-rule create \
   --end-ip-address 0.0.0.0
 echo "✅ Firewall rule created."
 
-# Insert demo data
 echo "📝 Inserting demo data into $SQL_SOURCE_DB ..."
 docker run --rm mcr.microsoft.com/mssql-tools \
   /opt/mssql-tools/bin/sqlcmd -S "${SQL_SOURCE_SERVER}.database.windows.net" \
@@ -50,7 +45,6 @@ docker run --rm mcr.microsoft.com/mssql-tools \
   -Q "CREATE TABLE Users (id INT PRIMARY KEY, name NVARCHAR(50)); INSERT INTO Users VALUES (1,'Alice'), (2,'Bob');"
 echo "✅ Demo data inserted."
 
-# Verify demo data
 echo "🔎 Verifying demo data in $SQL_SOURCE_DB ..."
 docker run --rm mcr.microsoft.com/mssql-tools \
   /opt/mssql-tools/bin/sqlcmd -S "${SQL_SOURCE_SERVER}.database.windows.net" \
