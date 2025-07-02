@@ -13,7 +13,7 @@ This hands-on lab demonstrates a **complete offline migration** of a SQL Server 
 By completing this lab, you will:
 
 - Create a source Azure SQL Server and populate it with data.
-- Create a target Azure SQL Server and empty database.
+- Create a target Azure SQL Server VM and empty database.
 - Provision Azure DMS with required networking.
 - Execute the migration using Azure Portal + REST API.
 - Validate the migration using `sqlcmd`.
@@ -42,27 +42,34 @@ Ensure the following are available:
 ## 🔧 Step 0: Set Required Variables
 
 ```bash
-# Azure settings
-RESOURCE_GROUP="rg-dms-demo"
+# Set Azure region and resource group
 LOCATION="australiaeast"
+RESOURCE_GROUP="rg-dms-demo"
+
+# Set SQL admin username and randomized password
+ADMIN_USER="sqladmin"
+ADMIN_PASSWORD="P@ssw0rd$RANDOM"
+
+# Set source SQL Server and database names (randomized for uniqueness)
+SQL_SOURCE_SERVER="sqlsource$RANDOM"
+SQL_SOURCE_DB="sqldb$(date +%s%N | sha256sum | head -c 8)"
+
+# Set networking names
 VNET_NAME="dms-vnet"
 SUBNET_NAME="dms-subnet"
+
+# Set target SQL VM name and image
+SQL_VM_NAME="sqlvmdemo$RANDOM"
+SQL_IMAGE="MicrosoftSQLServer:sql2019-ws2022:sqldev:15.0.250227"
+
+# Set storage account, container, and backup folder for SQL backups
+STORAGE_NAME="sourcesqlbackup$RANDOM"
+STORAGE_CONTAINER="sqlcontainerbackup$RANDOM"
+BACKUP_FOLDER="backupfolder$(date +%Y%m%d)"
+
+# Get current Azure subscription ID
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 
-# SQL Server & DB
-SQL_SOURCE_NAME="sqlsource$RANDOM"
-SQL_TARGET_NAME="sqltarget$RANDOM"
-SQL_ADMIN_USER="sqladmin"
-SQL_ADMIN_PASSWORD="P@ssw0rd$RANDOM"
-SQL_DB_NAME="sqldb$(date +%s%N | sha256sum | head -c 8)"
-
-# Derived/compatibility
-SQL_SA_USER="$SQL_ADMIN_USER"
-SQL_SA_PASSWORD="$SQL_ADMIN_PASSWORD"
-
-# DMS setup
-DMS_NAME="dms-demo"
-PROJECT_NAME="sqlmig-project"
 ```
 
 ---
@@ -100,8 +107,8 @@ az sql server create \
   --name "$SQL_SOURCE_NAME" \
   --resource-group "$RESOURCE_GROUP" \
   --location "$LOCATION" \
-  --admin-user "$SQL_ADMIN_USER" \
-  --admin-password "$SQL_ADMIN_PASSWORD"
+  --admin-user "$ADMIN_USER" \
+  --admin-password "$ADMIN_PASSWORD"
 
 # Create DB
 az sql db create \
@@ -121,97 +128,125 @@ az sql server firewall-rule create \
 # Insert data
 docker run --rm mcr.microsoft.com/mssql-tools \
   /opt/mssql-tools/bin/sqlcmd -S "$SQL_SOURCE_NAME.database.windows.net" \
-  -U "$SQL_ADMIN_USER" -P "$SQL_ADMIN_PASSWORD" \
+  -U "$ADMIN_USER" -P "$ADMIN_PASSWORD" \
   -d "$SQL_DB_NAME" \
   -Q "CREATE TABLE Users (id INT, name NVARCHAR(50)); INSERT INTO Users VALUES (1,'Alice'), (2,'Bob');"
 
 # Validate data
 docker run --rm mcr.microsoft.com/mssql-tools \
   /opt/mssql-tools/bin/sqlcmd -S "$SQL_SOURCE_NAME.database.windows.net" \
-  -U "$SQL_ADMIN_USER" -P "$SQL_ADMIN_PASSWORD" \
+  -U "$ADMIN_USER" -P "$ADMIN_PASSWORD" \
   -d "$SQL_DB_NAME" \
   -Q "SELECT * FROM Users;"
 ```
 
 ---
 
-## ☁️ Step 3: Create Target SQL Server
+## ☁️ Step 3: Deploy Target SQL Server VM (SQL Server VM for Migration)
 
 ```bash
-# Create target SQL Server
-az sql server create \
-  --name "$SQL_TARGET_NAME" \
+# --- Prompt for password (hidden input) ---
+read -s -p "🔑 Enter SQL VM admin password: " ADMIN_PASSWORD
+echo
+
+# --- Create VM ---
+az vm create \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$SQL_VM_NAME" \
+  --image "$SQL_IMAGE" \
+  --admin-username "$ADMIN_USER" \
+  --admin-password "$ADMIN_PASSWORD" \
+  --size Standard_D2s_v3 \
+  --public-ip-sku Standard \
+  --vnet-name "$VNET_NAME" \
+  --subnet "$SUBNET_NAME"
+
+# --- Register as SQL VM in Azure ---
+az sql vm create \
+  --name "$SQL_VM_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --license-type PAYG \
+  --image-sku Developer \
+  --sql-mgmt-type Full
+
+# --- Open SQL TCP port 1433 (optional, for DMS or remote access) ---
+az vm open-port --resource-group "$RESOURCE_GROUP" --name "$SQL_VM_NAME" --port 1433
+
+```
+
+## ☁️ Step 4: Setup Storage Blob for SQL backups
+
+```bash
+# --- Create storage account ---
+az storage account create \
+  --name "$STORAGE_NAME" \
   --resource-group "$RESOURCE_GROUP" \
   --location "$LOCATION" \
-  --admin-user "$SQL_ADMIN_USER" \
-  --admin-password "$SQL_ADMIN_PASSWORD"
+  --sku Standard_LRS
+echo "✅ Storage account created."
 
-# Create empty DB
-az sql db create \
-  --resource-group "$RESOURCE_GROUP" \
-  --server "$SQL_TARGET_NAME" \
-  --name "$SQL_DB_NAME" \
-  --service-objective S0
-
-# Allow firewall access
-az sql server firewall-rule create \
-  --resource-group "$RESOURCE_GROUP" \
-  --server "$SQL_TARGET_NAME" \
-  --name AllowAllAzureIPs \
-  --start-ip-address 0.0.0.0 \
-  --end-ip-address 0.0.0.0
+# --- Create blob container ---
+az storage container create \
+  --account-name "$STORAGE_NAME" \
+  --name "$STORAGE_CONTAINER" \
+  --auth-mode login
+echo "✅ Blob container created."
 ```
+#### 🔒 Add Role Permission to upload files
 
----
+In the Storage account IAM:
 
-## 🛡️ Step 4: Register Provider + Provision DMS
+- Select ➕ Add Role Assignment
+- Search and Select `Storage Blob Data Contributor`
+- Assign the role to (service principle, user, group)
 
+#### 🧑‍🚀  Upload placeholder to make backup folder visible
 ```bash
-# Register DMS provider
-az provider register --namespace Microsoft.DataMigration --wait
+# --- Upload placeholder to make backup folder visible ---
+az storage blob upload \
+  --account-name "$STORAGE_NAME" \
+  --container-name "$STORAGE_CONTAINER" \
+  --name "$BACKUP_FOLDER/placeholder.txt" \
+  --file /dev/null \
+  --auth-mode login
+echo "✅ Placeholder file uploaded."
 
-# Create DMS instance
-az dms create \
-  --location $LOCATION \
-  --name $DMS_NAME \
-  --resource-group $RESOURCE_GROUP \
-  --sku-name Standard_2vCores \
-  --subnet $SUBNET_ID
 ```
 
 ---
 
-## 📂 Step 5: Create Migration Project
+## 🛡️ Step 5: Register Provider + Provision DMS
 
-```bash
-# Create migration project (Target = SQLDB)
-az rest --method PUT \
-  --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.DataMigration/services/$DMS_NAME/projects/$PROJECT_NAME?api-version=2022-03-30-preview" \
-  --body "{\"location\": \"$LOCATION\", \"properties\": {\"sourcePlatform\": \"SQL\", \"targetPlatform\": \"SQLDB\"}}" \
-  --headers "Content-Type=application/json"
+#### 🛠️ DMS Instance Creation and Project Setup (Azure Portal)
 
-# Verify project
-az rest --method GET \
-  --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.DataMigration/services/$DMS_NAME/projects?api-version=2022-03-30-preview" \
-  --query "value[].name" -o tsv
-```
+Follow these steps if the CLI-based creation of the Azure Database Migration Service (DMS) is delayed or failing:
 
----
-
-## 🚧 Step 6: Complete Migration in Azure Portal
-
-> Azure CLI does **not** support creating the final SQL ➞ SQL migration task.
-
-### 👉 Use Azure Portal:
-
-1. Go to **DMS instance → Project → + New Activity**
-2. Choose **Offline data migration**
-3. Fill in:
-   - Source: `$SQL_SOURCE_NAME.database.windows.net`
-   - Target: `$SQL_TARGET_NAME.database.windows.net`
-   - DB name: `$SQL_DB_NAME`
-4. Use `SQL_ADMIN_USER` / `SQL_ADMIN_PASSWORD`
-5. Start migration and monitor progress
+1. Go to the Azure Portal: Database Migration Service
+  - Select:  `➕ Create`
+2. When prompted, set:
+  - **Source server type:** SQL Server
+  - **Target server type:** Azure SQL Viratual Machine
+  - **Backup file storage:** Blob Storage
+  - **Migration Mode:** Offline
+  - **Name:** `$DMS_NAME`
+3. Select the DMS: `$DMS_NAME`:
+  - **Source Details:**
+    - **Is your source SQL Server instance tracked in Azure?:** `Yes`  
+    - **Resource Group:** `$RESOURCE_GROUP`
+    - **Region:** `$LOCATION`
+    - **SQL Server Instance:** `$SQL_VM_NAME`
+  - **Select migration target:**
+    - **Resource Group:** `$RESOURCE_GROUP`
+    - **Target SQL Virtual Machine:** `$SQL_VM_NAME`
+  - **Data source configuration:**
+    - **Resource Group:** `$RESOURCE_GROUP`
+    - **Storage account:** `$STORAGE_NAME`
+    - **Storage conatiner:** `$STORAGE_CONTAINER`
+    - **Storage conatiner:** `$SBACKUP_FOLDER`
+    - **Last backup file:** `placeholder.bak`
+    - **Target database:** `$SQL_DB_NAME`
+4. Next ➡️ Database migration summary
+5. **Start Migration**
 
 ---
 
@@ -219,8 +254,8 @@ az rest --method GET \
 
 ```bash
 docker run --rm mcr.microsoft.com/mssql-tools \
-  /opt/mssql-tools/bin/sqlcmd -S "$SQL_TARGET_NAME.database.windows.net" \
-  -U "$SQL_ADMIN_USER" -P "$SQL_ADMIN_PASSWORD" \
+  /opt/mssql-tools/bin/sqlcmd -S "$SQL_VM_NAME" \
+  -U "$ADMIN_USER" -P "$ADMIN_PASSWORD" \
   -d "$SQL_DB_NAME" \
   -Q "SELECT * FROM Users;"
 ```
@@ -232,7 +267,7 @@ docker run --rm mcr.microsoft.com/mssql-tools \
 | Item           | Value                                 |
 |----------------|----------------------------------------|
 | **Source**     | Azure SQL Database                    |
-| **Target**     | Azure SQL Database                    |
+| **Target**     | Azure SQL VM                    |
 | **Tool**       | Azure Database Migration Service (DMS) |
 | **Mode**       | Offline                                |
 | **UI Used**    | Azure CLI + Azure Portal               |
