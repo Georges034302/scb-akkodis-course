@@ -41,12 +41,22 @@ az sql server firewall-rule create \
   --end-ip-address 0.0.0.0
 echo "✅ Firewall rule created."
 
-# Insert data
+# Insert demo data
 echo "📝 Inserting demo data into $SQL_DB_NAME ..."
 docker run --rm mcr.microsoft.com/mssql-tools \
-  sqlcmd -S "${SQL_SOURCE_NAME}.database.windows.net" \
+  /opt/mssql-tools/bin/sqlcmd -S "${SQL_SOURCE_NAME}.database.windows.net" \
   -U "$SQL_ADMIN_USER" -P "$SQL_ADMIN_PASSWORD" \
-  -d "$SQL_DB_NAME" -Q "CREATE TABLE Users (id INT, name NVARCHAR(50)); INSERT INTO Users VALUES (1,'Alice'), (2,'Bob');"
+  -d "$SQL_DB_NAME" \
+  -Q "CREATE TABLE Users (id INT, name NVARCHAR(50)); INSERT INTO Users VALUES (1,'Alice'), (2,'Bob');"
 echo "✅ Demo data inserted."
 
-echo "🎉 Source SQL Server and database setup
+# Verify demo data
+echo "🔎 Verifying demo data in $SQL_DB_NAME ..."
+docker run --rm mcr.microsoft.com/mssql-tools \
+  /opt/mssql-tools/bin/sqlcmd -S "${SQL_SOURCE_NAME}.database.windows.net" \
+  -U "$SQL_ADMIN_USER" -P "$SQL_ADMIN_PASSWORD" \
+  -d "$SQL_DB_NAME" \
+  -Q "SELECT * FROM Users;"
+echo "✅ Data verification complete."
+
+echo "🎉 Source SQL Server and database setup completed successfully."

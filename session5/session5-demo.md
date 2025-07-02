@@ -138,9 +138,16 @@ az sql server firewall-rule create \
 
 # Insert data
 docker run --rm mcr.microsoft.com/mssql-tools \
-  sqlcmd -S ${SQL_SOURCE_NAME}.database.windows.net \
-  -U $SQL_ADMIN_USER -P $SQL_ADMIN_PASSWORD \
-  -d $SQL_DB_NAME -Q "CREATE TABLE Users (id INT, name NVARCHAR(50)); INSERT INTO Users VALUES (1,'Alice'), (2,'Bob');"
+  /opt/mssql-tools/bin/sqlcmd -S "${SQL_SOURCE_NAME}.database.windows.net" \
+  -U "$SQL_ADMIN_USER" -P "$SQL_ADMIN_PASSWORD" \
+  -d "$SQL_DB_NAME" -Q "CREATE TABLE Users (id INT, name NVARCHAR(50)); INSERT INTO Users VALUES (1,'Alice'), (2,'Bob');"
+
+# Verify inserted data
+docker run --rm mcr.microsoft.com/mssql-tools \
+  /opt/mssql-tools/bin/sqlcmd -S "${SQL_SOURCE_NAME}.database.windows.net" \
+  -U "$SQL_ADMIN_USER" -P "$SQL_ADMIN_PASSWORD" \
+  -d "$SQL_DB_NAME" -Q "SELECT * FROM Users;"
+
 ```
 
 ---
@@ -191,7 +198,7 @@ az dms create \
 
 ---
 
-## 📂 Step 5: Create Migration Project and Task
+## 📂 Step 5: Create Migration Project 
 
 ```bash
 # Create migration project
@@ -219,13 +226,13 @@ az rest --method GET \
 
 1. Go to your Azure DMS instance (`$DMS_NAME`) in the Portal.
 2. Under **Projects**, click your project (`$PROJECT_NAME`).
-3. Click **+ New Activity** → **Online data migration**.
+3. Click **+ New Activity** → **Offline data migration**.
 4. Fill in the following:
-    - **Source server name:** `sqlsource.database.windows.net`
-    - **Target server name:** `sqltarget.database.windows.net`
-    - **Authentication:** Use `SQL_ADMIN_USER` / `SQL_ADMIN_PASSWORD` from your `.env`
-    - **Database name:** `$SQL_DB_NAME` from your `.env`
-5. Select `SQL_DB_NAME` from your `.env` and start the migration.
+    - **Source server name:** `$SQL_SOURCE_NAME.database.windows.net`
+    - **Target server name:** `$SQL_TARGET_NAME.database.windows.net`
+    - **Authentication:** Use `$SQL_ADMIN_USER` / `$SQL_ADMIN_PASSWORD`
+    - **Database name:** `$SQL_DB_NAME`
+5. Select `$SQL_DB_NAME` and start the migration.
 
 ---
 

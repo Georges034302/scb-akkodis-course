@@ -12,33 +12,14 @@ fi
 
 # Clean up previous values
 echo "🧹 Cleaning up previous environment variables in .env..."
-sed -i '/^export RESOURCE_GROUP=/d' .env
-sed -i '/^export LOCATION=/d' .env
-sed -i '/^export SQL_SOURCE_NAME=/d' .env
-sed -i '/^export SQL_TARGET_NAME=/d' .env
-sed -i '/^export SQL_SERVER_NAME=/d' .env
-sed -i '/^export SQL_ADMIN_USER=/d' .env
-sed -i '/^export SQL_ADMIN_PASSWORD=/d' .env
-sed -i '/^export SQL_DB_NAME=/d' .env
-sed -i '/^export VNET_NAME=/d' .env
-sed -i '/^export SUBNET_NAME=/d' .env
-sed -i '/^export SUBNET_ID=/d' .env
-sed -i '/^export DMS_NAME=/d' .env
-sed -i '/^export PROJECT_NAME=/d' .env
-sed -i '/^export TASK_NAME=/d' .env
-sed -i '/^export SUBSCRIPTION_ID=/d' .env
-sed -i '/^export SQL_SA_USER=/d' .env
-sed -i '/^export SQL_SA_PASSWORD=/d' .env
-sed -i '/^export SQL_MI_ADMIN_USER=/d' .env
-sed -i '/^export SQL_MI_PASSWORD=/d' .env
+sed -i '/^export /d' .env
 
 # Generate values
 echo "🔑 Generating randomized values..."
 RESOURCE_GROUP="rg-dms-demo"
 LOCATION="australiaeast"
 SQL_SOURCE_NAME="sqlsource$RANDOM"
-SQL_TARGET_NAME="sqltarget$RANDOM"
-SQL_SERVER_NAME="$SQL_SOURCE_NAME"   # For compatibility
+SQL_TARGET_NAME="sqlmi$RANDOM"  # This is your Azure SQL MI
 SQL_ADMIN_USER="sqladmin"
 SQL_ADMIN_PASSWORD="P@ssw0rd$RANDOM"
 SQL_DB_NAME="sqldb$(date +%s%N | sha256sum | head -c 8)"
@@ -70,8 +51,6 @@ az network vnet create \
   --subnet-name "$SUBNET_NAME" \
   --subnet-prefix 10.10.1.0/24
 
-# No subnet delegation needed for classic DMS
-
 # Get subnet ID
 echo "🔎 Fetching subnet ID..."
 SUBNET_ID=$(az network vnet subnet show \
@@ -82,26 +61,25 @@ SUBNET_ID=$(az network vnet subnet show \
 
 # Save to .env
 echo "💾 Saving environment variables to .env..."
-{
-  echo "export RESOURCE_GROUP=$RESOURCE_GROUP"
-  echo "export LOCATION=$LOCATION"
-  echo "export SQL_SOURCE_NAME=$SQL_SOURCE_NAME"
-  echo "export SQL_TARGET_NAME=$SQL_TARGET_NAME"
-  echo "export SQL_SERVER_NAME=$SQL_SERVER_NAME"
-  echo "export SQL_ADMIN_USER=$SQL_ADMIN_USER"
-  echo "export SQL_ADMIN_PASSWORD=$SQL_ADMIN_PASSWORD"
-  echo "export SQL_SA_USER=$SQL_SA_USER"
-  echo "export SQL_SA_PASSWORD=$SQL_SA_PASSWORD"
-  echo "export SQL_MI_ADMIN_USER=$SQL_MI_ADMIN_USER"
-  echo "export SQL_MI_PASSWORD=$SQL_MI_PASSWORD"
-  echo "export SQL_DB_NAME=$SQL_DB_NAME"
-  echo "export VNET_NAME=$VNET_NAME"
-  echo "export SUBNET_NAME=$SUBNET_NAME"
-  echo "export SUBNET_ID=$SUBNET_ID"
-  echo "export DMS_NAME=$DMS_NAME"
-  echo "export PROJECT_NAME=$PROJECT_NAME"
-  echo "export TASK_NAME=$TASK_NAME"
-  echo "export SUBSCRIPTION_ID=$SUBSCRIPTION_ID"
-} >> .env
+cat <<EOF >> .env
+export RESOURCE_GROUP=$RESOURCE_GROUP
+export LOCATION=$LOCATION
+export SQL_SOURCE_NAME=$SQL_SOURCE_NAME
+export SQL_TARGET_NAME=$SQL_TARGET_NAME
+export SQL_ADMIN_USER=$SQL_ADMIN_USER
+export SQL_ADMIN_PASSWORD=$SQL_ADMIN_PASSWORD
+export SQL_SA_USER=$SQL_SA_USER
+export SQL_SA_PASSWORD=$SQL_SA_PASSWORD
+export SQL_MI_ADMIN_USER=$SQL_MI_ADMIN_USER
+export SQL_MI_PASSWORD=$SQL_MI_PASSWORD
+export SQL_DB_NAME=$SQL_DB_NAME
+export VNET_NAME=$VNET_NAME
+export SUBNET_NAME=$SUBNET_NAME
+export SUBNET_ID=$SUBNET_ID
+export DMS_NAME=$DMS_NAME
+export PROJECT_NAME=$PROJECT_NAME
+export TASK_NAME=$TASK_NAME
+export SUBSCRIPTION_ID=$SUBSCRIPTION_ID
+EOF
 
 echo "✅ All environment variables initialized and saved to .env"
