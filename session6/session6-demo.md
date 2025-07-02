@@ -125,39 +125,46 @@ jobs:
 Push all files to `main` branch to trigger CI/CD.
 
 ---
+## ✅ Step 4: Validate in Azure Portal
 
-## 🔄 Step 4: Validate in Azure Portal
+- **Go to Azure Portal → Policy → Definitions**  
+  *Purpose: Ensure your custom policy is present in the subscription.*
 
-1. Go to **Azure Portal → Policy → Definitions** to confirm policy appears
-2. Navigate to **Policy → Assignments**
-3. Confirm `Enforce Australia East Region Only` is assigned
-4. Deploy a test VM in `southeastasia` to see enforcement failure
+- **Navigate to Policy → Assignments**  
+  *Purpose: Confirm the policy is assigned at the correct scope.*
 
----
+- **Find and review the assignment `Enforce Australia East Region Only`**  
+  *Purpose: Validate that the assignment name and scope are correct.*
 
-## 🔢 Step 5: Monitor Assignment and Drift
-
-### Optional: Run in Azure CLI
-
-```bash
-az policy state list \
-  --policy-assignment-name enforce-aue-only \
-  --query "[].{resource:resourceId, compliance:complianceState}"
-```
-
-### Optional: Configure Sentinel Rule
-
-Use `AzureActivity` table to detect policy assignment changes:
-
-```kql
-AzureActivity
-| where OperationNameValue contains "Microsoft.Authorization/policyAssignments/write"
-| project TimeGenerated, Caller, ResourceGroup, ActivityStatus, Properties
-```
+- **Test enforcement by creating a resource group in a disallowed region:**
+  ```bash
+  az group create --name test-denied --location southeastasia
+  ```
+  *Purpose: Ensure the policy blocks non-compliant deployments as expected.*
 
 ---
 
-## 📋 Summary
+## 🕵️‍♂️ Step 5: Monitor Assignment and Query Activity Logs
+
+- **Check policy compliance status in Azure CLI:**
+  ```bash
+  az policy state list \
+    --policy-assignment-name enforce-aue-only \
+    --query "[].{resource:resourceId, compliance:complianceState}"
+  ```
+  *Purpose: Identify which resources comply or do not comply with the policy.*
+
+- **Query assignment change history in Azure Activity Logs (Azure Portal → Monitor → Logs):**
+  ```kql
+  AzureActivity
+  | where OperationNameValue contains "Microsoft.Authorization/policyAssignments/write"
+  | project TimeGenerated, Caller, ResourceGroup, ActivityStatus, Properties
+  ```
+  *Purpose: Review historical changes to policy assignments for auditing or troubleshooting.*
+
+---
+
+## 📝 Step 6: Summary
 
 | Component      | Description                             |
 | -------------- | --------------------------------------- |

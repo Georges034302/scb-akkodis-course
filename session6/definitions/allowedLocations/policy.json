@@ -1,14 +1,9 @@
 {
-  "displayName": "Allowed Locations - Australia East Only",
-  "mode": "All",
-  "description": "Only allow resources in australiaeast.",
-  "policyRule": {
-    "if": {
-      "field": "location",
-      "notEquals": "australiaeast"
-    },
-    "then": {
-      "effect": "deny"
-    }
+  "if": {
+    "field": "location",
+    "notEquals": "australiaeast"
+  },
+  "then": {
+    "effect": "deny"
   }
 }
