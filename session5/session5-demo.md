@@ -21,7 +21,7 @@ By completing this lab, you will:
 </td>
 <td>
 
-<img src="dms.png" alt="DMS Diagram" width="400"/>
+<img src="https://github.com/user-attachments/assets/cef9c11e-8c64-4e3d-b10e-a8ec0069c85c" alt="DMS Diagram" width="900"/>
 
 </td>
 </tr>
