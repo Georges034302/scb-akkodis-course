@@ -88,8 +88,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'definitions/**'
-      - 'assignments/**'
+      - 'session6/**'
 
 jobs:
   deploy:
