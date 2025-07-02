@@ -39,18 +39,47 @@ Ensure the following are available:
 - Docker installed (for `sqlcmd` container usage)
 
 ---
+
+## 🔧 Step 0: Set Required Variables
+
+```bash
+# Variables
+
+# 🌎 General Azure & Networking
+RESOURCE_GROUP="rg-dms-demo"
+LOCATION="australiaeast"
+VNET_NAME="dms-vnet"
+SUBNET_NAME="dms-subnet"
+SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+SUBNET_ID=$(az network vnet subnet show \
+  --resource-group "$RESOURCE_GROUP" \
+  --vnet-name "$VNET_NAME" \
+  --name "$SUBNET_NAME" \
+  --query "id" -o tsv)
+
+# 🗄️ SQL Server & Database
+SQL_SOURCE_NAME="sqlsource$RANDOM"
+SQL_TARGET_NAME="sqltarget$RANDOM"
+SQL_ADMIN_USER="sqladmin"
+SQL_ADMIN_PASSWORD="P@ssw0rd$RANDOM"
+SQL_DB_NAME="sqldb$(date +%s%N | sha256sum | head -c 8)"
+
+# 🔑 Compatibility/Admin Variables
+SQL_SA_USER="$SQL_ADMIN_USER"
+SQL_SA_PASSWORD="$SQL_ADMIN_PASSWORD"
+SQL_MI_ADMIN_USER="$SQL_ADMIN_USER"
+SQL_MI_PASSWORD="$SQL_ADMIN_PASSWORD"
+
+# ⚙️ DMS Project
+DMS_NAME="dms-demo"
+PROJECT_NAME="sqlmig-project"
+```
+
 ---
 
 ## 🌐 Step 1: Provision DMS Infracstructure (VNet and Subnet)
 
 ```bash
-# Variables
-RESOURCE_GROUP="rg-dms-demo"
-LOCATION="australiaeast"
-VNET_NAME="dms-vnet"
-SUBNET_NAME="dms-subnet"
-DMS_NAME="dms-demo"
-SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 
 # Create resource group
 az group create --name $RESOURCE_GROUP --location $LOCATION
@@ -84,13 +113,6 @@ SUBNET_ID=$(az network vnet subnet show \
 ## 🧱 Step 2: Create Source SQL Server & Populate Database
 
 ```bash
-# Variables
-SQL_SOURCE_NAME="sqlsource$RANDOM"
-SQL_TARGET_NAME="sqltarget$RANDOM"
-SQL_ADMIN_USER="sqladmin"
-SQL_ADMIN_PASSWORD="P@ssw0rd$RANDOM"
-SQL_DB_NAME="sqldb$(date +%s%N | sha256sum | head -c 8)"
-
 # Create source SQL Server
 az sql server create \
   --name $SQL_SOURCE_NAME \
