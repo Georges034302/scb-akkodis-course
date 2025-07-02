@@ -16,24 +16,24 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-    - name: Azure Login
-      uses: azure/login@v1
-      with:
-        client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-    - name: Create Policy Definition
-      run: |
-        az policy definition create \
-          --name allowed-locations \
-          --policy session6/definitions/allowedLocations/policy.json \
+      - name: Create Policy Definition
+        run: |
+          az policy definition create \
+            --name allowed-locations \
+            --policy session6/definitions/allowedLocations/policy.json
 
-    - name: Assign Policy via Bicep
-      run: |
-        az deployment sub create \
-          --location australiaeast \
-          --template-file session6/assignments/assign-aue-prod.bicep \
-          --name assign-location-policy
+      - name: Assign Policy via Bicep
+        run: |
+          az deployment sub create \
+            --location australiaeast \
+            --template-file session6/assignments/assign-aue-prod.bicep \
+            --name assign-location-policy
