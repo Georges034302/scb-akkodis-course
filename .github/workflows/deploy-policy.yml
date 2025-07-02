@@ -27,7 +27,7 @@ jobs:
       run: |
         az policy definition create \
           --name allowed-locations \
-          --rules session6/definitions/allowedLocations/policyRule.json \
+          --rules session6/definitions/allowedLocations/policy.json \
           --mode All \
           --display-name "Australia East Only"
 
