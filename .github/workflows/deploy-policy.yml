@@ -1,10 +1,6 @@
 name: Deploy Region Policy
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - 'session6/**'
   workflow_dispatch:
 
 permissions:
@@ -15,7 +11,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
       - name: Azure Login
         uses: azure/login@v1
@@ -31,8 +27,7 @@ jobs:
             --rules @session6/definitions/allowedLocations/policy.json \
             --mode All \
             --display-name "Allowed Locations - Australia East Only" \
-            --description "Only allow resources in australiaeast." \
-            || echo "Policy definition may already exist"
+            --description "Only allow resources in australiaeast."
 
       - name: Assign Policy via Bicep
         run: |
@@ -43,4 +38,5 @@ jobs:
             --template-file session6/assignments/assign-aue-prod.bicep \
             --parameters policyDefinitionId=$POLICY_DEF_ID \
             --name assign-location-policy
+
 
