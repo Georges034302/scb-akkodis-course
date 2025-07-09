@@ -130,7 +130,7 @@ jobs:
 
 ```
 
-Push all files to `main` branch to trigger CI/CD.
+Push all files to `main` branch to trigger CI/CD. [test the deployment and validate]
 
 ---
 ## ✅ Step 4: Validate in Azure Portal
