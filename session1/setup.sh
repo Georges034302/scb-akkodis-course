@@ -1,65 +1,92 @@
 #!/bin/bash
+set -euo pipefail
 
-# This script sets up the environment for the week 5 exercises.
-set -e
+# Unset Actions token if present (avoid gh using it)
+unset GITHUB_TOKEN || true
 
-source .env
-unset GH_TOKEN GITHUB_TOKEN
-gh auth logout --hostname github.com || true
-echo "$ADMIN_TOKEN" | gh auth login --with-token --hostname github.com
-
-SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-TENANT_ID=$(az account show --query tenantId -o tsv)
-
-SP_NAME="gh-actions-sp$RANDOM"
-echo "export SP_NAME=$SP_NAME" >> .env
-
-APP_ID=$(az ad sp list --display-name "$SP_NAME" --query "[0].appId" -o tsv || true)
-
-if [[ -z "$APP_ID" ]]; then
-  echo "🆕 Creating new service principal: $SP_NAME"
-  APP_ID=$(az ad app create --display-name "$SP_NAME" --query appId -o tsv)
-  az ad sp create --id "$APP_ID"
+# ---- Auth materials ----
+if [[ -f .env ]]; then
+  # shellcheck disable=SC1091
+  source .env
 else
-  echo "✅ Found existing service principal: $APP_ID"
+  echo "ERROR: .env not found. Create it with: export ADMIN_TOKEN=yourPAT" >&2
+  exit 1
+fi
+: "${ADMIN_TOKEN:?ERROR: ADMIN_TOKEN not set in .env}"
+
+# ---- GitHub CLI auth ----
+gh auth logout --hostname github.com >/dev/null 2>&1 || true
+echo "$ADMIN_TOKEN" | gh auth login --with-token --hostname github.com >/dev/null
+gh auth status --hostname github.com --show-token >/dev/null || { echo "ERROR: gh auth failed"; exit 1; }
+
+# ---- Azure context ----
+az account show >/dev/null 2>&1 || { echo "ERROR: run 'az login' first"; exit 1; }
+AZ_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+AZ_TENANT_ID=$(az account show --query tenantId -o tsv)
+az account set --subscription "$AZ_SUBSCRIPTION_ID"
+
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+APP_NAME="github-actions-policy-demo-${RANDOM}"
+
+# ---- App registration (idempotent) ----
+EXISTING_APP_ID=$(az ad app list --display-name "$APP_NAME" --query '[0].appId' -o tsv)
+if [[ -z "${EXISTING_APP_ID}" ]]; then
+  echo "Creating app: $APP_NAME"
+  az ad app create --display-name "$APP_NAME" --enable-id-token-issuance true --sign-in-audience AzureADMyOrg --only-show-errors >/dev/null
+  AZ_CLIENT_ID=$(az ad app list --display-name "$APP_NAME" --query '[0].appId' -o tsv)
+else
+  AZ_CLIENT_ID="$EXISTING_APP_ID"
+  echo "App exists: $APP_NAME ($AZ_CLIENT_ID)"
 fi
 
-az role assignment create \
-  --assignee "$APP_ID" \
-  --role Contributor \
-  --scope "/subscriptions/$SUBSCRIPTION_ID" || echo "ℹ️ Contributor role may already be assigned."
+# ---- Service principal (idempotent) ----
+if ! az ad sp show --id "$AZ_CLIENT_ID" --only-show-errors >/dev/null 2>&1; then
+  echo "Creating service principal for $AZ_CLIENT_ID"
+  az ad sp create --id "$AZ_CLIENT_ID" --only-show-errors >/dev/null
+fi
 
-CLIENT_SECRET=$(az ad app credential reset   --id "$APP_ID"   --append   --query password -o tsv)
+# ---- Federated credential (idempotent) ----
+FC_NAME="github-actions-federated-credential"
+if ! az ad app federated-credential list --id "$AZ_CLIENT_ID" --query "[?name=='$FC_NAME']" -o tsv | grep -q .; then
+  echo "Adding federated credential for repo $REPO (main)"
+  az ad app federated-credential create --id "$AZ_CLIENT_ID" --parameters "{
+    \"name\": \"$FC_NAME\",
+    \"issuer\": \"https://token.actions.githubusercontent.com\",
+    \"subject\": \"repo:$REPO:ref:refs/heads/main\",
+    \"description\": \"GitHub Actions OIDC federated credential for main branch\",
+    \"audiences\": [\"api://AzureADTokenExchange\"]
+  }" >/dev/null
+fi
 
-LOCATION="australiaeast"
-RG_NAME="lab5-rg"
-
-echo "export LOCATION=$LOCATION" >> .env # store LOCATION in .env
-echo "export RG_NAME=$RG_NAME" >> .env # store RG_NAME in .env
-
-az provider register --namespace Microsoft.Web
-
-az group create --name "$RG_NAME" --location "$LOCATION"
-
-AZURE_CREDENTIALS=$(cat <<EOF
-{
-  "clientId": "$APP_ID",
-  "clientSecret": "$CLIENT_SECRET",
-  "subscriptionId": "$SUBSCRIPTION_ID",
-  "tenantId": "$TENANT_ID",
-  "activeDirectoryEndpointUrl": "https://login.microsoftonline.com",
-  "resourceManagerEndpointUrl": "https://management.azure.com/",
-  "activeDirectoryGraphResourceId": "https://graph.windows.net/",
-  "sqlManagementEndpointUrl": "https://management.core.windows.net:8443/",
-  "galleryEndpointUrl": "https://gallery.azure.com/",
-  "managementEndpointUrl": "https://management.core.windows.net/"
+# ---- Role assignments (idempotent) ----
+assign_role() {
+  local role="$1"
+  local scope="/subscriptions/$AZ_SUBSCRIPTION_ID"
+  if ! az role assignment list --assignee "$AZ_CLIENT_ID" --role "$role" --scope "$scope" --query "[0]" -o tsv | grep -q .; then
+    echo "Assigning role: $role"
+    az role assignment create --assignee "$AZ_CLIENT_ID" --role "$role" --scope "$scope" --only-show-errors >/dev/null
+  fi
 }
+assign_role "Contributor"
+assign_role "Resource Policy Contributor"
+
+# ---- Repo secrets ----
+gh secret set AZURE_CLIENT_ID -b"$AZ_CLIENT_ID" >/dev/null
+gh secret set AZURE_TENANT_ID -b"$AZ_TENANT_ID" >/dev/null
+gh secret set AZURE_SUBSCRIPTION_ID -b"$AZ_SUBSCRIPTION_ID" >/dev/null
+
+# ---- Propagation wait (short) ----
+echo "Waiting 15s for role assignment propagation..."
+sleep 15
+
+cat <<EOF
+
+OIDC ready for GitHub Actions.
+
+AZURE_CLIENT_ID:        $AZ_CLIENT_ID
+AZURE_TENANT_ID:        $AZ_TENANT_ID
+AZURE_SUBSCRIPTION_ID:  $AZ_SUBSCRIPTION_ID
+Federated Credential:   $FC_NAME (repo: $REPO, branch: main)
+
+Use these in your workflow with azure/login@v1.
 EOF
-)
-
-APP_NAME="lab5app$RANDOM" # generate a unique app name
-
-echo "export APP_NAME=$APP_NAME" >> .env # store APP_NAME in .env
-
-echo "$APP_NAME" | gh secret set APP_NAME
-echo "$AZURE_CREDENTIALS" | gh secret set AZURE_CREDENTIALS

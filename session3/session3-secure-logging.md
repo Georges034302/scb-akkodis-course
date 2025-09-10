@@ -1,4 +1,4 @@
-# 🧪 Hands-On Lab: Secure Storage Access Using ARM Template and RFC 1918 IP Strategy
+# 🧪 Secure Storage Access Using ARM Template and RFC 1918 IP Strategy
 
 ## 🏷️ Lab Title
 Deploy a Secure Logging Architecture with Private Endpoint and RFC 1918 IP Strategy Using ARM JSON

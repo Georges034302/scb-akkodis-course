@@ -1,4 +1,4 @@
-## 🧪 Lab Title: NSG Flow Visibility Lab – 🔒 Monitor and Block Intra-VNet Traffic
+## 🧪 NSG Flow Visibility Lab – 🔒 Monitor and Block Intra-VNet Traffic
 
 ---
 
