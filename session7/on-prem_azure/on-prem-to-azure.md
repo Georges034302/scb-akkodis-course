@@ -146,10 +146,81 @@ When complete:
 - A **test VM** will be created in Australia Southeast.
 - Under **Replicated items**, select the test failover VM to view its details and copy the public IP address.
 
-Connect using SSH:
-```bash
-ssh azureuser@<test-vm-public-ip>
-```
+**If the test VM does not have a public IP:**
+
+a. Get the NIC name dynamically:
+   ```bash
+   NIC_ID=$(az vm show \
+     --resource-group rg-migrate-demo-asr \
+     --name source-vm \
+     --query "networkProfile.networkInterfaces[0].id" \
+     -o tsv)
+   NIC_NAME=$(basename "$NIC_ID")
+   ```
+
+b. Create a public IP:
+   ```bash
+   az network public-ip create \
+     --resource-group rg-migrate-demo-asr \
+     --name source-vm-pip
+   ```
+
+c. Associate the public IP with the NIC (confirm the NIC and ipconfig names first):
+   ```bash
+   az network nic show \
+     --resource-group rg-migrate-demo-asr \
+     --name "$NIC_NAME" \
+     --query "ipConfigurations[].name" \
+     -o table
+   # Use the actual name from the output, e.g., ipconfigsource-vm
+   az network nic ip-config update \
+     --resource-group rg-migrate-demo-asr \
+     --nic-name "$NIC_NAME" \
+     --name ipconfigsource-vm \
+     --public-ip-address source-vm-pip
+   ```
+
+d. Get the actual public IP address:
+   ```bash
+   TEST_IP=$(az network.public-ip show \
+     --resource-group rg-migrate-demo-asr \
+     --name source-vm-pip \
+     --query "ipAddress" \
+     -o tsv)
+   ```
+
+e. Allow SSH in VM NSG:
+   ```bash
+   # Create a new NSG
+   az network nsg create \
+    --resource-group rg-migrate-demo-asr \
+    --name asr-ssh-nsg \
+    --location southeastasia
+
+   # Allow SSH in the new NSG
+  az network nsg rule create \
+    --resource-group rg-migrate-demo-asr \
+    --nsg-name asr-ssh-nsg \
+    --name allow-ssh \
+    --priority 1000 \
+    --access Allow \
+    --protocol Tcp \
+    --direction Inbound \
+    --source-address-prefixes 0.0.0.0/0 \
+    --destination-port-ranges 22
+
+   # Attach the NSG to the subnet
+  az network vnet subnet update \
+    --resource-group rg-migrate-demo-asr \
+    --vnet-name vnet-migrate-asr \
+    --name subnet-migrate \
+    --network-security-group asr-ssh-nsg
+   ```
+
+f. Connect to the test VM using SSH:
+   ```bash
+   ssh azureuser@"$TEST_IP"
+   ```
 
 ---
 
@@ -220,6 +291,23 @@ az group delete \
   --name rg-migrate-target \
   --yes \
   --no-wait
+
+az vm deallocate \
+  --resource-group rg-migrate-demo-asr \
+  --name source-vm
+
+az vm delete \
+  --resource-group rg-migrate-demo-asr \
+  --name source-vm \
+  --yes
+
+az network nic delete \
+  --resource-group rg-migrate-demo-asr \
+  --name source-vmVMNic
+
+az network public-ip delete \
+  --resource-group rg-migrate-demo-asr \
+  --name source-vm-pip
 ```
 
 ---
