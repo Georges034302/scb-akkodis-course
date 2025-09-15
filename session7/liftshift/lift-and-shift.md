@@ -21,66 +21,95 @@ Run from the `session7` folder:
 
 ### 2. Create a Source VM (Simulating On-Prem)
 
-    az vm create \
-      --resource-group rg-migrate-demo \
-      --name source-vm \
-      --image UbuntuLTS \
-      --size Standard_B1s \
-      --admin-username azureuser \
-      --generate-ssh-keys \
-      --vnet-name vnet-migrate \
-      --subnet subnet-migrate \
-      --nsg nsg-migrate
+You will be prompted to enter a secure password for the VM admin user:
+
+```bash
+read -s -p "Enter a secure password for the VM admin user: " ADMIN_PASSWORD && echo
+az vm create \
+  --resource-group rg-migrate-demo \
+  --name source-vm \
+  --image Ubuntu2204 \
+  --size Standard_B1s \
+  --admin-username azureuser \
+  --admin-password "$ADMIN_PASSWORD" \
+  --authentication-type password \
+  --vnet-name vnet-migrate \
+  --subnet subnet-migrate \
+  --nsg nsg-migrate
+```
 
 ---
 
 ### 3. Stop the Source VM
 
-    az vm deallocate -g rg-migrate-demo -n source-vm
+```bash
+az vm deallocate \
+  -g rg-migrate-demo \
+  -n source-vm
+```
 
 ---
 
 ### 4. Snapshot the OS Disk
 
-    SOURCE_DISK=$(az vm show -g rg-migrate-demo -n source-vm \
-        --query "storageProfile.osDisk.managedDisk.id" -o tsv)
+```bash
+SOURCE_DISK=$(az vm show \
+  -g rg-migrate-demo \
+  -n source-vm \
+  --query "storageProfile.osDisk.managedDisk.id" \
+  -o tsv)
 
-    az snapshot create \
-      -g rg-migrate-demo \
-      -n source-snap \
-      --source "$SOURCE_DISK"
+az snapshot create \
+  -g rg-migrate-demo \
+  -n source-snap \
+  --source "$SOURCE_DISK"
+```
 
 ---
 
 ### 5. Create a Managed Disk from Snapshot
 
-    az disk create \
-      -g rg-migrate-demo \
-      -n migrated-disk \
-      --source source-snap
+```bash
+az disk create \
+  -g rg-migrate-demo \
+  -n migrated-disk \
+  --source source-snap
+```
 
 ---
 
 ### 6. Create Target "Migrated VM"
 
-    az vm create \
-      --resource-group rg-migrate-demo \
-      --name migrated-vm \
-      --attach-os-disk migrated-disk \
-      --os-type Linux \
-      --size Standard_B1s \
-      --admin-username azureuser \
-      --generate-ssh-keys \
-      --vnet-name vnet-migrate \
-      --subnet subnet-migrate \
-      --nsg nsg-migrate
+You will be prompted to enter a secure password for the migrated VM admin user:
+
+```bash
+read -s -p "Enter a secure password for the migrated VM admin user: " ADMIN_PASSWORD && echo
+az vm create \
+  --resource-group rg-migrate-demo \
+  --name migrated-vm \
+  --attach-os-disk migrated-disk \
+  --os-type Linux \
+  --size Standard_B1s \
+  --vnet-name vnet-migrate \
+  --subnet subnet-migrate \
+  --nsg nsg-migrate
+```
 
 ---
 
 ### 7. Validate the Migration
 
-    ./env.sh status
-    ssh azureuser@<migrated-vm-public-ip>
+```bash
+./env.sh status
+
+PUBLIC_IP=$(az vm show -d \
+  --resource-group rg-migrate-demo \
+  --name migrated-vm \
+  --query publicIps \
+  -o tsv)
+
+ssh azureuser@"$PUBLIC_IP"
+```
 
 Exit with `exit` when done.
 
@@ -88,7 +117,9 @@ Exit with `exit` when done.
 
 ### 8. Cleanup (Optional)
 
-    ./env.sh cleanup
+```bash
+./env.sh cleanup
+```
 
 ---
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Common setup & cleanup for Session 7 labs (Linux VM landing zone)
+# Lightweight common setup & cleanup for Session 7 labs (landing zone only)
 set -euo pipefail
 
 # -------- Config (overridable via env vars) --------
@@ -13,7 +13,7 @@ SUBNET_PREFIX="${SUBNET_PREFIX:-10.10.1.0/24}"
 TAGS="${TAGS:-workshop=session7}"
 CREATE_NSG="${CREATE_NSG:-true}"                 # true|false
 NSG_NAME="${NSG_NAME:-nsg-migrate}"
-SSH_SOURCE="${SSH_SOURCE:-0.0.0.0/0}"            # Optionally lock to your IP (e.g., "203.0.113.5/32")
+SSH_SOURCE="${SSH_SOURCE:-0.0.0.0/0}"            # Optionally lock to your IP
 
 trap 'echo "❌ Error on line $LINENO. Exiting."; exit 1' ERR
 
@@ -34,7 +34,7 @@ login() {
   fi
 
   echo "Active subscription:"
-  az account show --query '{name:name, id:id, tenantId:tenantId}' -o table
+  az account show --query '{name:name, id:id}' -o table
 }
 
 init() {
@@ -98,13 +98,12 @@ init() {
 
 status() {
   need_az
-  # If not logged in, this will fail fast but cleanly
   if ! az account show >/dev/null 2>&1; then
     echo "Not logged in. Run: $0 login"
     exit 1
   fi
 
-  echo "🔍 Checking environment status (subscription + resources)..."
+  echo "🔍 Checking environment status..."
   az account show --query '{name:name, id:id}' -o table
 
   printf "Resource Group '%s': " "${RESOURCE_GROUP}"
@@ -137,9 +136,6 @@ status() {
       echo "❌ not found"
     fi
   fi
-
-  echo "VMs in RG '${RESOURCE_GROUP}' (name, public IP, power state):"
-  az vm list -g "${RESOURCE_GROUP}" --show-details --query "[].{name:name, ip:publicIps, state:powerState}" -o table || true
 }
 
 cleanup() {
@@ -152,6 +148,9 @@ cleanup() {
 usage() {
   cat <<EOF
 Usage: $(basename "$0") {login|init|status|cleanup}
+
+This script prepares only the landing zone (RG, VNet, Subnet, NSG).
+VMs are created separately in each lab.
 
 Env vars (optional):
   SUBSCRIPTION_ID     Azure subscription ID to target
