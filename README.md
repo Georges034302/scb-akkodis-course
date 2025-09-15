@@ -75,20 +75,20 @@ SCB Azure Training Series by Akkodis. Includes slide decks and lab guides for si
 - **Script:** [`session7/env.sh`](session7/env.sh)
 
 ### 🧪 [Lift & Shift Migration Lab](session7/liftshift/lift-and-shift.md)
-- **Objective:** Guide for classic lift-and-shift migration scenarios to Azure.
-- **Topics:** VM migration, assessment, Azure Migrate, rehosting.
+- **Objective:** Simulate a lift-and-shift (rehost) migration by capturing a Linux VM, creating a snapshot and managed disk, and deploying a new VM from that disk to represent the migrated workload.
+- **Topics:** Lift & Shift (Rehost) migration, VM snapshot, managed disks, disk cloning, SSH validation, mapping to Azure Migrate workflow.
 
 ### 🧪 [On-Premises to Azure Migration Lab](session7/on-prem_azure/on-prem-to-azure.md)
-- **Objective:** Step-by-step migration from on-premises infrastructure to Azure.
-- **Topics:** Site-to-site VPN, migration tooling, validation.
+- **Objective:** Demonstrate a basic migration scenario from on-premises to Azure using Azure Site Recovery.
+- **Topics:** Recovery Services Vault, agent registration, replication, test failover, cleanup.
 
 ### 🧪 [Azure to Azure Migration Lab](session7/azure_migration/azure-to-azure.md)
-- **Objective:** Migrate workloads between Azure regions or subscriptions.
-- **Topics:** Cross-region migration, resource movement, downtime minimization.
+- **Objective:** Move a VM between Azure regions using image capture and deployment.
+- **Topics:** VM deallocation, generalization, image creation, cross-region image copy, VM deployment from image.
 
 ### 🧪 [AWS to Azure Migration Lab](session7/aws_azure/aws-to-azure.md)
-- **Objective:** Migrate workloads from AWS to Azure.
-- **Topics:** Assessment, migration tools, compatibility, post-migration validation.
+- **Objective:** Demonstrate a basic migration scenario from AWS to Azure using Azure Migrate.
+- **Topics:** Azure Migrate project, appliance setup, AWS discovery, replication, migration, cleanup.
 
 </details>
 
