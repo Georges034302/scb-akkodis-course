@@ -68,6 +68,30 @@ SCB Azure Training Series by Akkodis. Includes slide decks and lab guides for si
 
 </details>
 
+<details>
+<summary><strong>Session 7 – Demo</strong> (click to expand/hide)</summary>
+
+### 🧰 Common Environment Setup & Cleanup
+- **Script:** [`session7/env.sh`](session7/env.sh)
+
+### 🧪 [Lift & Shift Migration Lab](session7/liftshift/lift-and-shift.md)
+- **Objective:** Guide for classic lift-and-shift migration scenarios to Azure.
+- **Topics:** VM migration, assessment, Azure Migrate, rehosting.
+
+### 🧪 [On-Premises to Azure Migration Lab](session7/on-prem_azure/on-prem-to-azure.md)
+- **Objective:** Step-by-step migration from on-premises infrastructure to Azure.
+- **Topics:** Site-to-site VPN, migration tooling, validation.
+
+### 🧪 [Azure to Azure Migration Lab](session7/azure_migration/azure-to-azure.md)
+- **Objective:** Migrate workloads between Azure regions or subscriptions.
+- **Topics:** Cross-region migration, resource movement, downtime minimization.
+
+### 🧪 [AWS to Azure Migration Lab](session7/aws_azure/aws-to-azure.md)
+- **Objective:** Migrate workloads from AWS to Azure.
+- **Topics:** Assessment, migration tools, compatibility, post-migration validation.
+
+</details>
+
 ---
 
 #### 🧑‍🏫 Author: Georges Bou Ghantous
