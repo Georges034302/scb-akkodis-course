@@ -284,14 +284,18 @@ lsb_release -a
 
 ### 8. Cleanup (Optional)
 Remove all resources created in this lab:
+
 ```bash
+# Run environment cleanup script (if available)
 ./env.sh cleanup
 
+# Delete the target resource group
 az group delete \
   --name rg-migrate-target \
   --yes \
   --no-wait
 
+# Deallocate and delete the replicated VM (if still present)
 az vm deallocate \
   --resource-group rg-migrate-demo-asr \
   --name source-vm
@@ -301,13 +305,40 @@ az vm delete \
   --name source-vm \
   --yes
 
+# Delete the network interface (must be detached from VM first)
 az network nic delete \
   --resource-group rg-migrate-demo-asr \
   --name source-vmVMNic
 
+# Delete the public IP
 az network public-ip delete \
   --resource-group rg-migrate-demo-asr \
   --name source-vm-pip
+
+# Delete the NSG (if you created one for SSH)
+az network nsg delete \
+  --resource-group rg-migrate-demo-asr \
+  --name asr-ssh-nsg
+
+# Delete the subnet or VNet if needed
+# az network vnet subnet delete \
+#   --resource-group rg-migrate-demo-asr \
+#   --vnet-name vnet-migrate-asr \
+#   --name subnet-migrate
+
+# az network vnet delete \
+#   --resource-group rg-migrate-demo-asr \
+#   --name vnet-migrate-asr
+
+# Delete any disk replicas if present
+# az disk delete \
+#   --resource-group rg-migrate-demo-asr \
+#   --name <disk-name> \
+#   --yes
+
+# Delete any snapshots or images referencing the disk
+# az snapshot delete -g <resource-group> -n <snapshotName>
+# az image delete -g <resource-group> -n <imageName>
 ```
 
 ---
