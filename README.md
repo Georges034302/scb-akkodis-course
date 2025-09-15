@@ -5,259 +5,66 @@ SCB Azure Training Series by Akkodis. Includes slide decks and lab guides for si
 <details>
 <summary><strong>Session 1 – Demo</strong> (click to expand/hide)</summary>
 
-### 🧪 Hands-On Lab: Secure Storage Access Using ARM Template and RFC 1918 IP Strategy
+### 🧪 [Enforce Required Tags with Azure Policy, Bicep & GitHub Actions](session1/session1-enforce-tags.md)
+- **Objective:** Require an `owner` tag on every Azure resource using Azure Policy as code, Bicep for assignment, and GitHub Actions for deployment.
+- **Topics:** Policy as code, Bicep, OIDC, GitHub Actions, tag governance.
 
-#### 🏷️ Lab Title
-Deploy a Secure Logging Architecture with Private Endpoint and RFC 1918 IP Strategy Using ARM JSON
+### 🧪 [Restrict VM SKUs with Azure Policy](session1/session1-allowed-vms.md)
+- **Objective:** Restrict allowed VM SKUs in a subscription using Azure Policy.
+- **Topics:** Policy definition, assignment, compliance validation.
 
-#### 🎯 Lab Objective
-Deploy a logging subnet and storage account using RFC 1918 IP address space, and integrate it with a Private Endpoint and Private DNS Zone to enforce internal-only access — following best practice cloud security architecture.
-
-#### ✅ Lab Scenario
-A centralized logging application resides within AppSubnet. This app must write logs to an Azure Storage account, which must not be accessible over the internet.
-
-### 🔧 Lab Steps Overview
-
-| Setup Step | Description                                      |
-|------------|--------------------------------------------------|
-| 1          | Create the Resource Group                        |
-| 2          | Create the ARM Template                          |
-
-| Deploy Step | Description                                     |
-|-------------|-------------------------------------------------|
-| 1           | Deploy the ARM Template                         |
-| 2           | Create the Private Endpoint                     |
-| 3           | Create and Link Private DNS Zone                |
-
-| Test Step   | Description                                     |
-|-------------|-------------------------------------------------|
-| 1           | Verify DNS Resolution (from inside the VNet)    |
-| 2           | Confirm Public Access Blocked                   |
-| 3           | (Optional) Create a Test VM in the VNet         |
-| 4           | (Optional) SSH into the Test VM                 |
-| 5           | (Optional) Test DNS and Storage Access from VM  |
-| 6           | (Optional) Test Internet Blocking via NSG       |
-
-| Expected Outcome | Description                                                      |
-|------------------|------------------------------------------------------------------|
-| 1                | Storage account is only accessible privately                     |
-| 2                | DNS resolves to private IP inside the VNet                       |
-| 3                | Public access is blocked as expected                             |
-| 4                | Private endpoint and DNS zone are validated                      |
-| 5                | A secure VNet using `10.50.0.0/16` with subnetting               |
-| 6                | A storage account that’s only accessible over the private network|
-| 7                | DNS correctly resolving via `privatelink.blob.core.windows.net`  |
-| 8                | Full validation that no public access is allowed, and internal routing works
+### 🧪 [Entra RBAC & MFA Enforcement](session1/session1-entra-rbac-mfa.md)
+- **Objective:** Configure Entra ID (Azure AD) RBAC and enforce MFA for privileged roles.
+- **Topics:** Entra ID, RBAC, MFA, role assignment, security best practices.
 
 </details>
 
 <details>
 <summary><strong>Session 2 – Demo</strong> (click to expand/hide)</summary>
 
-### 🧪 Hands-On Lab: Sentinel Lab – Key Vault Detection
-
-#### 🏷️ Lab Title
-Detect and Respond to Suspicious Access Patterns in Azure Key Vault Using Microsoft Sentinel
-
-#### 🎯 Lab Objective
-Simulate and detect excessive secret access by a privileged identity, trigger a Microsoft Sentinel analytics rule, and automate the response using a Logic App to disable the account and notify the SOC team.
-
-#### ✅ Lab Scenario
-A privileged user retrieves secrets from Azure Key Vault more frequently than expected, indicating possible insider threat or credential misuse.
-
-## 🔧 Lab Steps Overview
-
-| Setup Step | Description                                      |
-| ---------- | ------------------------------------------------ |
-| 1          | Create Resource Group and Key Vault              |
-| 2          | Assign Key Vault Contributor role to a test user |
-| 3          | Enable diagnostic logging to Log Analytics       |
-
-| Detection Step | Description                                  |
-| -------------- | -------------------------------------------- |
-| 1              | Simulate 10 secret retrievals using CLI loop |
-| 2              | Author Sentinel Analytics Rule using KQL     |
-
-| Response Step | Description                                 |
-| ------------- | ------------------------------------------- |
-| 1             | Create Logic App Playbook for auto-response |
-| 2             | Connect playbook to analytics rule          |
-
-| Expected Outcome | Description                                                |
-| ---------------- | ---------------------------------------------------------- |
-| 1                | Sentinel incident created upon detection                   |
-| 2                | User account automatically disabled via Graph API          |
-| 3                | SOC notified via Teams                                     |
-| 4                | Event archived and metrics visible in Workbooks/Dashboards |
-| 5                | End-to-end audit-traceable response workflow confirmed     |
+### 🧪 [Sentinel Lab – Key Vault Detection](session2/session2_demo.md)
+- **Objective:** Detect and respond to suspicious access patterns in Azure Key Vault using Microsoft Sentinel and Logic Apps.
+- **Topics:** Sentinel analytics, KQL, Logic Apps, incident response, Key Vault monitoring.
 
 </details>
 
 <details>
 <summary><strong>Session 3 – Demo</strong> (click to expand/hide)</summary>
 
-### 🧪 Hands-On Lab: NSG Flow Visibility Lab – Monitor and Block Intra-VNet Traffic
+### 🧪 [Secure Logging Architecture with Private Endpoint](session3/session3-secure-logging.md)
+- **Objective:** Deploy a secure logging architecture using ARM/Bicep, private endpoints, and private DNS.
+- **Topics:** Storage security, private networking, DNS, ARM/Bicep automation.
 
-#### 🏷️ Lab Title
-Simulate and monitor denied traffic within Azure Virtual Networks using Network Security Groups (NSGs) and Flow Logs
-
-#### 🎯 Lab Objective
-Deploy a 2-tier segmented network with enforced NSG rules to block unauthorized east-west traffic. Use Network Watcher to monitor and validate traffic visibility and rule effectiveness.
-
-#### ✅ Lab Scenario
-A frontend VM (`vm-web`) is placed in a web subnet and attempts SSH access to a backend VM (`vm-app`) in a secure subnet. An NSG rule blocks the connection, and flow logs are used to confirm denied traffic events.
-
----
-
-### 🔧 Lab Steps Overview
-
-| Setup Step | Description                                         |
-|------------|-----------------------------------------------------|
-| 1          | Deploy infrastructure using Bicep or CLI            |
-| 2          | Apply NSG to deny SSH from web-subnet to app-subnet |
-| 3          | Enable Network Watcher in the region                |
-
-| Validation Step | Description                                    |
-|-----------------|------------------------------------------------|
-| 1               | Attempt SSH from vm-web to vm-app              |
-| 2               | Confirm connection is denied due to NSG rule   |
-| 3               | Analyze NSG Flow Logs for denied traffic       |
-
-| Expected Outcome | Description                                   |
-|------------------|-----------------------------------------------|
-| 1                | East-west SSH blocked by explicit NSG rule    |
-| 2                | Flow logs show denied TCP/22 traffic          |
-| 3                | Demonstrates intra-VNet traffic visibility    |
+### 🧪 [NSG Flow Logs – Monitor and Block Intra-VNet Traffic](session3/session3_nsg-flow-logs.md)
+- **Objective:** Monitor and block intra-VNet traffic using NSGs and Flow Logs.
+- **Topics:** NSG rules, Network Watcher, flow log analysis, segmentation.
 
 </details>
 
 <details>
-<summary><strong>Session 4 - Demo</strong> (click to expand/hide)</summary>
+<summary><strong>Session 4 – Demo</strong> (click to expand/hide)</summary>
 
-### 🧪 Hands-On Lab: Immutable Storage for Audit Compliance
-
-#### 🏷️ Lab Title
-Configure Immutable Blob Storage with Protected Append Writes and Legal Hold Using Azure CLI and Portal
-
-#### 🎯 Lab Objective
-Implement enterprise-grade immutable storage in Azure Blob to retain critical logs for 7 years in WORM (Write Once Read Many) mode, using CLI and Portal.
-
-#### ✅ Lab Scenario
-You are tasked with ensuring security audit logs are immutable and verifiable for a 7-year compliance period.
-
-A storage account and container are deployed with a time-based WORM policy (2555 days), protected append writes, and (optionally) a legal hold.
-
----
-
-### 🔧 Lab Steps Overview
-
-| Setup Step | Description                                         |
-|------------|-----------------------------------------------------|
-| 1          | Login to Azure CLI                                  |
-| 2          | Create resource group and storage account           |
-| 3          | Create blob container                               |
-| 4          | Set immutability policy (WORM, append writes)       |
-| 5          | Upload sample log file                              |
-| 6          | Lock immutability policy                            |
-| 7          | (Optional) Apply legal hold                         |
-
-| Validation Step | Description                                    |
-|-----------------|------------------------------------------------|
-| 1               | Attempt to delete blob (should fail)           |
-| 2               | Check immutability policy status               |
-| 3               | Confirm append writes are allowed              |
-| 4               | (Optional) Check legal hold status             |
-
-| Expected Outcome | Description                                   |
-|------------------|-----------------------------------------------|
-| 1                | Blob container is immutable for 7 years       |
-| 2                | Blob deletion is blocked by WORM policy       |
-| 3                | Append writes succeed, but deletes/updates fail|
-| 4                | Legal hold is visible and enforced             |
+### 🧪 [Immutable Storage for Audit Compliance](session4/session4-demo.md)
+- **Objective:** Configure immutable blob storage with protected append writes and legal hold using CLI and Portal.
+- **Topics:** Storage immutability, WORM, compliance, legal hold, CLI automation.
 
 </details>
 
 <details>
-<summary><strong>Session 5 - Demo</strong> (click to expand/hide)</summary>
+<summary><strong>Session 5 – Demo</strong> (click to expand/hide)</summary>
 
-### 🛠️ Azure DMS Migration Demo: Azure SQL ➞ Azure SQL
-
-#### 🏷️ Lab Title
-Online Migration from Azure SQL Server to Azure SQL Server using Azure Database Migration Service (DMS)
-
-#### 🎯 Lab Objective
-Demonstrate a **complete online migration** of a SQL Server database from one Azure SQL Server to another using Azure Database Migration Service (DMS), with all steps performed via Azure CLI and REST API.
-
-#### ✅ Lab Scenario
-You are tasked with migrating a production database from a source Azure SQL Server to a target Azure SQL Server. The migration must be automated, auditable, and validated using CLI and SQL queries.
-
----
-
-### 🔧 Lab Steps Overview
-
-| Setup Step | Description                                                      |
-|------------|------------------------------------------------------------------|
-| 1          | Create and populate the source Azure SQL Server and database     |
-| 2          | Create the target Azure SQL Server and empty database            |
-| 3          | Provision Azure DMS and required networking                      |
-| 4          | Create DMS migration project and task                            |
-| 5          | Validate migration in the target Azure SQL Server                |
-
-| Validation Step | Description                                    |
-|-----------------|------------------------------------------------|
-| 1               | Connect to target Azure SQL Server and validate data |
-| 2               | Confirm schema and row count match source      |
-| 3               | Review DMS migration status and logs           |
-
-| Expected Outcome | Description                                   |
-|------------------|-----------------------------------------------|
-| 1                | Source Azure SQL Server is populated with demo data |
-| 2                | Target Azure SQL Server receives data via DMS migration |
-| 3                | CLI and REST automate the full migration workflow |
-| 4                | SQL queries confirm data and schema integrity |
-
+### 🛠️ [Azure DMS Migration Demo – Azure SQL ➞ Azure SQL](session5/session5-demo.md)
+- **Objective:** Perform an online migration from Azure SQL Server to Azure SQL Server using Azure Database Migration Service (DMS).
+- **Topics:** Database migration, DMS, automation, validation, SQL.
 
 </details>
 
 <details>
-<summary><strong>Session 6 - Demo</strong> (click to expand/hide)</summary>
+<summary><strong>Session 6 – Demo</strong> (click to expand/hide)</summary>
 
-### 🧪 Hands-On Lab: Azure Policy & Blueprints for Enterprise Governance
-
-#### 🏷️ Lab Title
-Automate and Enforce Cloud Governance with Azure Policy and Blueprints
-
-#### 🎯 Lab Objective
-Design and implement enterprise governance at scale using Azure Policy and Blueprints. Enforce compliance, resource consistency, and security standards across multiple subscriptions using policy definitions, initiatives, and blueprint assignments.
-
-#### ✅ Lab Scenario
-You are tasked with ensuring all Azure resources in your organization comply with security and operational standards. You will use Azure Policy to restrict resource types, enforce tagging, and require encryption. Blueprints will be used to deploy standardized environments with built-in compliance controls.
-
----
-
-### 🔧 Lab Steps Overview
-
-| Setup Step | Description                                                      |
-|------------|------------------------------------------------------------------|
-| 1          | Create a resource group for governance artifacts                 |
-| 2          | Author and assign Azure Policy definitions (e.g., allowed SKUs, required tags, encryption) |
-| 3          | Group policies into an initiative and assign to a subscription   |
-| 4          | Create and publish an Azure Blueprint with artifacts (policies, RBAC, ARM templates) |
-| 5          | Assign the blueprint to a subscription or management group       |
-
-| Validation Step | Description                                    |
-|-----------------|------------------------------------------------|
-| 1               | Deploy resources and verify policy enforcement  |
-| 2               | Attempt to create non-compliant resources      |
-| 3               | Review compliance results in Azure Policy blade|
-| 4               | Confirm blueprint assignment and artifact deployment |
-
-| Expected Outcome | Description                                   |
-|------------------|-----------------------------------------------|
-| 1                | Non-compliant resources are denied or flagged |
-| 2                | Required tags and settings are enforced       |
-| 3                | Blueprint assignments deploy consistent environments |
-| 4                | Compliance dashboard reflects policy status   |
+### 🧪 [Azure Policy & Blueprints for Enterprise Governance](session6/session6-demo.md)
+- **Objective:** Automate and enforce cloud governance with Azure Policy and Blueprints.
+- **Topics:** Policy definitions, initiatives, blueprints, compliance, RBAC, ARM/Bicep.
 
 </details>
 

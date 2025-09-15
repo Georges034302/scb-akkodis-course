@@ -1,4 +1,4 @@
-## 📉️ Lab Title: Sentinel Lab – Key Vault Detection
+## 📉️ Sentinel Lab – Key Vault Detection
 
 ---
 
