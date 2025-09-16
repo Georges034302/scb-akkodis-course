@@ -76,19 +76,15 @@ SCB Azure Training Series by Akkodis. Includes slide decks and lab guides for si
 
 ### 🧪 [Lift & Shift Migration Lab](session7/liftshift/lift-and-shift.md)
 - **Objective:** Simulate a lift-and-shift (rehost) migration by capturing a Linux VM, creating a snapshot and managed disk, and deploying a new VM from that disk to represent the migrated workload.
-- **Topics:** Lift & Shift (Rehost) migration, VM snapshot, managed disks, disk cloning, SSH/password validation, mapping to Azure Migrate workflow.
+- **Topics:** Snapshot-based migration, managed disks, disk cloning, VM deployment, SSH/password validation.
 
-### 🧪 [On-Prem to Azure Migration Lab](session7/on-prem_azure/on-prem-to-azure.md)
+### 🧪 [Azure to Azure Migration Lab (ASR)](session7/azure-to-azure/asr-cross-region.md)
 - **Objective:** Simulate an on-premises to Azure migration using Azure Site Recovery (ASR) with a cross-region Recovery Services Vault, including test and planned failover.
 - **Topics:** ASR cross-region DR, Recovery Services Vault, portal-based replication, test failover, planned failover (cutover), SSH validation, cleanup.
 
-### 🧪 [Azure to Azure Migration Lab](session7/azure_migration/azure-to-azure.md)
-- **Objective:** Move a VM between Azure regions using image capture and deployment.
-- **Topics:** VM deallocation, generalization, image creation, cross-region image copy, VM deployment from image, validation.
-
-### 🧪 [AWS to Azure Migration Lab](session7/aws_azure/aws-to-azure.md)
-- **Objective:** Demonstrate a basic migration scenario from AWS to Azure using Azure Migrate.
-- **Topics:** Azure Migrate project, appliance setup, AWS discovery, replication, migration, validation, cleanup.
+### 🧪 [AWS to Azure Migration Lab (Simulated VHD Import)](session7/aws_azure/aws-to-azure.md)
+- **Objective:** Demonstrate a basic migration scenario from AWS to Azure by simulating VHD import and VM deployment.
+- **Topics:** VHD export/import, managed disk creation, VM deployment from VHD, validation, cleanup.
 
 </details>
 
