@@ -1,14 +1,14 @@
 # Lab: On-Prem to Azure Migration (ASR)
 
 This lab demonstrates a simulated **on-premises to Azure migration** using **Azure Site Recovery (ASR)**.  
-A VM acts as the "on-prem source" (in Australia East) and is replicated into Azure using a Recovery Services Vault (in Southeast Asia).  
+A VM acts as the "on-prem source" (in Australia East) and is replicated into Azure using a Recovery Services Vault (in Australia Southeast).  
 You will configure replication, run a test failover, then perform a planned failover (cutover) to complete the migration.
 
 ---
 
 ## 🎯 Objectives
 - Learn how ASR replicates workloads into Azure.  
-- Configure a **cross-region Recovery Services Vault** (Australia East → Southeast Asia).  
+- Configure a **cross-region Recovery Services Vault** (Australia East → Australia Southeast).  
 - Perform **Test Failover** to validate migration safely.  
 - Perform **Planned Failover (cutover)** to complete the migration.  
 - Validate the migrated VM via SSH.  
@@ -58,22 +58,22 @@ az vm create \
 
 ---
 
-### 3. Create a Target Resource Group and Recovery Services Vault (in Southeast Asia)
+### 3. Create a Target Resource Group and Recovery Services Vault (in Australia Southeast)
 ASR requires the vault to be in a **different region** for cross-region DR.
 
-1. Create the target RG in Southeast Asia:
+1. Create the target RG in Australia Southeast:
     ```bash
     az group create \
       --name rg-migrate-target \
-      --location southeastasia
+      --location australiasoutheast
     ```
 
-2. Create the Recovery Services Vault in Southeast Asia:
+2. Create the Recovery Services Vault in Australia Southeast:
     ```bash
     az backup vault create \
       --name migrateVaultSEA \
       --resource-group rg-migrate-target \
-      --location southeastasia
+      --location australiasoutheast
     ```
 
 ---
@@ -195,7 +195,7 @@ e. Allow SSH in VM NSG:
    az network nsg create \
     --resource-group rg-migrate-demo-asr \
     --name asr-ssh-nsg \
-    --location southeastasia
+    --location australiasoutheast
 
    # Allow SSH in the new NSG
   az network nsg rule create \
@@ -344,9 +344,9 @@ az network nsg delete \
 ---
 
 ## 📘 Notes
-- **ASR requires cross-region DR** for non-zonal VMs. That’s why the vault and target RG are in `southeastasia`.  
+- **ASR requires cross-region DR** for non-zonal VMs. That’s why the vault and target RG are in `australiasoutheast`.  
 - **Test Failover** = validation without impacting the source VM.  
 - **Planned Failover** = final migration cutover.  
 - This lab simulates **on-prem → Azure** with a cross-region rehost scenario.  
 
-✅ **End of Lab** — you have completed an On-Prem to Azure migration using ASR (Australia East → Southeast Asia).
+✅ **End of Lab** — you have completed an On-Prem to Azure migration using ASR (Australia East → Australia Southeast).
