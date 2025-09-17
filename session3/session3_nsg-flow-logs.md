@@ -48,26 +48,28 @@ bash nsg_flow.sh
 
 ---
 
-### 📦 Step 3: Enable Flow Logs in Network Watcher (Manual)
+### 📦 Step 3: Enable Virtual Network Flow Logs (Manual)
 
-- Open **Azure Portal** and search for **Network Watcher**
-- In the left panel, select **Logs > Flow Logs**
-- Click **➕ Create**
-  - **Basics Tab:**
-    - Flow log type: `Network security group`
-    - Select NSG: `nsg-app` and confirm
-    - Location: `australiaeast`
-    - Create **Storage Account** for logs and assign the following roles to the logged-in identity:
-      - Storage Blob Data Contributor
-      - Storage Blob Data Owner
-    - Set retention (e.g., 30 days)
-  - **Analytics Tab:**
-    - Flow logs version: `Version 2`
-    - Enable **Traffic Analytics**
-      - Set interval: `10 minutes`
-      - Select Log Analytics workspace: `flowlog-law`
-  - Review and Create
-
+- Open **Azure Portal** and search for **Network Watcher**  
+- In the left panel, select **Logs > Flow Logs**  
+- Click **➕ Create**  
+  - **Basics Tab:**  
+    - **Flow log type:** `Virtual Network`  
+    - **Target Resource:** select `vnet-demo` (your deployed VNet)  
+    - **Location:** `australiaeast`  
+  - **Destination settings:**  
+    - **Storage account:** select the one created by your deployment (e.g., `flowlogstorageabcd1234`)  
+      - Do *not* accept a random auto-generated account (e.g., `flsay...`)  
+    - Assign the following roles to your signed-in identity (if not already granted):  
+      - `Storage Blob Data Contributor`  
+      - `Storage Blob Data Owner`  
+    - **Retention:** set to 30 days (or adjust per your policy)  
+  - **Analytics Tab:**  
+    - **Flow logs version:** `Version 2`  
+    - **Enable Traffic Analytics:** Yes  
+      - **Interval:** `10 minutes`  
+      - **Log Analytics workspace:** select `flowlog-law`  
+  - **Review + Create**  
 ---
 
 ### 🔍 Step 4: Post-Deployment Testing

@@ -9,7 +9,7 @@ param adminUsername string = 'azureuser'
 param adminPassword string
 
 resource sa 'Microsoft.Storage/storageAccounts@2022-09-01' = {
-  name: 'flsa${uniqueString(resourceGroup().id)}'
+  name: 'flowlogstorage${substring(uniqueString(resourceGroup().id), 0, 8)}'
   location: location
   sku: { name: 'Standard_LRS' }
   kind: 'StorageV2'
@@ -17,6 +17,7 @@ resource sa 'Microsoft.Storage/storageAccounts@2022-09-01' = {
     accessTier: 'Hot'
   }
 }
+
 
 resource law 'Microsoft.OperationalInsights/workspaces@2021-06-01' = {
   name: 'flowlog-law'
