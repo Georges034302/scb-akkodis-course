@@ -207,7 +207,7 @@ Click **Review + create**, then **Create** to finalize the rule.
 
 **Goal:** Automate containment or response actions when a Sentinel incident is triggered.
 
-1. Navigate to **Microsoft Sentinel > Automation**.
+1. Navigate to **Microsoft Sentinel (select the log analytics workspace) > Automation**.
 2. Click **➕ Create**.
 3. Select **Playbook with incident trigger**.
     - Select the subscription and resource group
