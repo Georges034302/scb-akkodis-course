@@ -253,6 +253,40 @@ done
 - Navigate to **Log Analytics** in Azure Portal
   - Copy and paste the `AzureDiagnostics` Kusto Query
   - Run the query and review the logs
+    ```kusto
+    AzureDiagnostics
+    | where OperationName == "SecretGet"
+    | where TimeGenerated >= ago(10m)
+    | extend UPN         = tostring(column_ifexists("identity_claim_upn_s", column_ifexists("identity_claim_name_s","")))
+    | extend ObjectId    = tostring(column_ifexists("identity_claim_objectidentifier_g",""))
+    | extend PrincipalId = tostring(column_ifexists("identity_claim_principalid_g",""))
+    | extend PUID        = tostring(column_ifexists("identity_claim_puid_s",""))
+    | project TimeGenerated, Resource, UPN, ObjectId, PrincipalId, PUID
+    | sort by TimeGenerated desc
+    ```
+  - Run the custom query to review the access logs to the vault:
+    ```kusto
+    let Window = 5m;
+    AzureDiagnostics
+    | where OperationName == "SecretGet"
+    // Extract available identity claims safely
+    | extend UPN        = tostring(column_ifexists("identity_claim_upn_s", column_ifexists("identity_claim_name_s","")))
+    | extend ObjectId   = tostring(column_ifexists("identity_claim_objectidentifier_g",""))
+    | extend PrincipalId= tostring(column_ifexists("identity_claim_principalid_g",""))
+    | extend PUID       = tostring(column_ifexists("identity_claim_puid_s",""))
+    // Build a robust identifier for correlation
+    | extend AadUserId  = iff(ObjectId != "", ObjectId, iff(PrincipalId != "", PrincipalId, PUID))
+    // Normalize UPN if present
+    | extend UPN        = iif(UPN == "", "", tolower(UPN))
+    // Count per user per 5-minute bin
+    | summarize AccessCount = count(), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated)
+        by UPN, AadUserId, bin(TimeGenerated, Window)
+    | where AccessCount > 5
+    // Friendly display name for alert text
+    | extend DisplayName = iif(UPN != "", UPN, AadUserId)
+    | project TimeGenerated = EndTime, DisplayName, UPN, AadUserId, AccessCount
+
+    ```
 
 ---
 
