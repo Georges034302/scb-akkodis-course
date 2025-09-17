@@ -290,6 +290,17 @@ done
 
 ---
 
+### 🔹 Step 7: Clean Up Azure Resources
+
+**Goal:** Remove all resources created for this lab to avoid unnecessary charges.
+
+ **Delete the resource group and all contained resources:**
+
+  ```bash
+   az group delete --name Demo-RG --yes --no-wait
+  ```
+
+---
 ## ✅ Success Criteria
 
 | **Check**                             | **Expected Result**                             |
