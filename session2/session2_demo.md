@@ -146,27 +146,27 @@ az monitor diagnostic-settings create \
 
 **Set Rule Logic Tab:**
 - **Rule query:**
-  ```kusto
-let Window = 5m;
-AzureDiagnostics
-| where OperationName == "SecretGet"
-// Extract available identity claims safely
-| extend UPN        = tostring(column_ifexists("identity_claim_upn_s", column_ifexists("identity_claim_name_s","")))
-| extend ObjectId   = tostring(column_ifexists("identity_claim_objectidentifier_g",""))
-| extend PrincipalId= tostring(column_ifexists("identity_claim_principalid_g",""))
-| extend PUID       = tostring(column_ifexists("identity_claim_puid_s",""))
-// Build a robust identifier for correlation
-| extend AadUserId  = iff(ObjectId != "", ObjectId, iff(PrincipalId != "", PrincipalId, PUID))
-// Normalize UPN if present
-| extend UPN        = iif(UPN == "", "", tolower(UPN))
-// Count per user per 5-minute bin
-| summarize AccessCount = count(), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated)
-    by UPN, AadUserId, bin(TimeGenerated, Window)
-| where AccessCount > 5
-// Friendly display name for alert text
-| extend DisplayName = iif(UPN != "", UPN, AadUserId)
-| project TimeGenerated = EndTime, DisplayName, UPN, AadUserId, AccessCount
-  ```
+    ```kusto
+    let Window = 5m;
+    AzureDiagnostics
+    | where OperationName == "SecretGet"
+    // Extract available identity claims safely
+    | extend UPN        = tostring(column_ifexists("identity_claim_upn_s", column_ifexists("identity_claim_name_s","")))
+    | extend ObjectId   = tostring(column_ifexists("identity_claim_objectidentifier_g",""))
+    | extend PrincipalId= tostring(column_ifexists("identity_claim_principalid_g",""))
+    | extend PUID       = tostring(column_ifexists("identity_claim_puid_s",""))
+    // Build a robust identifier for correlation
+    | extend AadUserId  = iff(ObjectId != "", ObjectId, iff(PrincipalId != "", PrincipalId, PUID))
+    // Normalize UPN if present
+    | extend UPN        = iif(UPN == "", "", tolower(UPN))
+    // Count per user per 5-minute bin
+    | summarize AccessCount = count(), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated)
+        by UPN, AadUserId, bin(TimeGenerated, Window)
+    | where AccessCount > 5
+    // Friendly display name for alert text
+    | extend DisplayName = iif(UPN != "", UPN, AadUserId)
+    | project TimeGenerated = EndTime, DisplayName, UPN, AadUserId, AccessCount
+    ```
 
 - **View query results:** Click *View query results* to validate the output (optional).
 
@@ -188,12 +188,12 @@ AzureDiagnostics
 - **Alert Name Format:** Excessive Key Vault Access by {{DisplayName}}
 - **Alert Description Format:** Principal {{DisplayName}} accessed secrets {{AccessCount}} times in a 5-minute window.
 
-- **Query scheduling:** Every 5 minutes
-- **Lookup data from the last:** 5 minutes
-- **Start running:** Automatically
-- **Alert threshold:** Leave at 0 (is greater than)
-- **Event grouping:** Group all events into a single alert 
-- **Suppression:** Leave unchecked unless you want to prevent multiple alerts
+- **Query scheduling:** Every 5 minutes  
+- **Lookup data from the last:** 5 minutes  
+- **Start running:** Automatically  
+- **Alert threshold:** Leave at 0 (is greater than)  
+- **Event grouping:** Group all events into a single alert  
+- **Suppression:** Leave unchecked unless you want to prevent multiple alerts  
 
 **Incident settings Tab:** Leave everything at defaults.
 
