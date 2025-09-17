@@ -127,7 +127,7 @@ ssh $ADMIN_USER@$VM_APP_PRIV
 #### 🔢 Option A: Using Azure Portal
 
 1. Go to Storage accounts → (name starts with flowlogstorage...). 
-2. Open `insights-nsg-flow-logs`
+2. Open `insights-logs-flowlogflowevent` container
 3. Navigate into the folder structure: `year/month/day/hour`
 4. Open a JSON log blob and inspect entries like:
    ```
@@ -137,12 +137,24 @@ ssh $ADMIN_USER@$VM_APP_PRIV
 
 #### 🔢 Option B: Using CLI
 
+> **Before running the commands below, make sure you have the correct permissions on the storage account:**
+>
+> 1. In the Azure Portal, go to **Storage accounts** → select your storage account (e.g., `flowlogstorage...`)
+> 2. In the left menu, select **Access control (IAM)**
+> 3. Click **+ Add > Add role assignment**
+> 4. Assign yourself one of the following roles (in order of preference):
+>    - **Storage Blob Data Owner**
+>    - **Storage Blob Data Contributor**
+>    - **Storage Blob Data Reader**
+> 5. Scope: Assign at the storage account level for least privilege.
+> 6. Wait a few minutes for the role assignment to propagate.
+
 ```bash
-# Get storage account name deployed in the resource group
+# Get the storage account name deployed in the resource group
 STORAGE_ACCOUNT=$(az storage account list -g $RG --query "[0].name" -o tsv)
 
-# Define the container
-CONTAINER="insights-nsg-flow-logs"
+# Dynamically get the container name for NSG flow logs
+CONTAINER=$(az storage container list --account-name $STORAGE_ACCOUNT --query "[?contains(name, 'flowlogflowevent')].name" -o tsv)
 
 # Get latest blob path
 BLOB_PATH=$(az storage blob list \
