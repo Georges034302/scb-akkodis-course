@@ -66,8 +66,12 @@ bash nsg_flow.sh
 9. Click **Save**.
 
 > **Important:**  
-> For full visibility, repeat steps 1–9 above for your **Network Security Group** (e.g., `nsg-app`).  
-> This ensures that VNet and NSG are sending flow logs to Log Analytics workspace and storage account.
+> For full visibility, repeat steps 1–9 above for your **Network Security Group** (e.g., `nsg-app`). \
+> Repeat the same process for the Network Interfaces (NICs) of both VMs (`vm-web` and `vm-app`).  
+> This ensures that your VNet, NSG, and both VM NICs are sending flow logs to your Log Analytics workspace and storage account.
+> - To verify, Search for: Network Watcher
+> - Go to Logs > Diagonistic Logs
+> - Ensure that diagonistics is enable for NSG and both NICs
 
 ---
 
@@ -94,6 +98,8 @@ bash nsg_flow.sh
        - **Log Analytics workspace:** select `flowlog-law`
    - **Review + Create**
 
+> **Important:**  
+> Repeat the above process for the **Network Interfaces (NICs) of both VMs** (`vm-web` and `vm-app`) to ensure flow logs are collected for all relevant resources.
 ---
 
 ### 🔍 Step 4: Post-Deployment Testing
