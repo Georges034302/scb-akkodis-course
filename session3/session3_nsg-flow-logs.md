@@ -228,37 +228,69 @@ After generating denied SSH attempts in Step 3, check the logs.
 
 #### 2. Run KQL Queries:
 
-**A. Recent NSG flow events (quick view)**
+**A. Execute this KQL query to get the schema**
+```kql
+AzureDiagnostics
+| getschema
+```
 
+**B. NSG Flow Log Events: Allow/Deny Actions with Source, Port, and Rule Details**
 ```kql
 AzureDiagnostics
 | where Category == "NetworkSecurityGroupEvent"
-| project TimeGenerated, srcIp_s, destIp_s, destPort_s, protocol_s, action_s, ruleName_s
+| project 
+    TimeGenerated,
+    primaryIPv4Address_s,           // Source IP
+    direction_s,                    // Direction (In/Out)
+    conditions_sourcePortRange_s,   // Source Port Range
+    conditions_destinationPortRange_s, // Destination Port Range
+    type_s,                         // Allow/Deny
+    ruleName_s                      // Rule Name
 | order by TimeGenerated desc
 ```
-**B. Denied SSH from vm-web → vm-app (most relevant)**
+
+**C. Denied SSH from vm-web → vm-app (port 22, block):**
 ```kql
 AzureDiagnostics
 | where Category == "NetworkSecurityGroupEvent"
-| where destPort_s == "22" and protocol_s =~ "TCP" and action_s =~ "Deny"
-| project TimeGenerated, srcIp_s, destIp_s, destPort_s, action_s, ruleName_s
+| where conditions_destinationPortRange_s == "22" or conditions_destinationPortRange_s == "22-22"
+| where type_s =~ "block"
+| project 
+    TimeGenerated,
+    primaryIPv4Address_s,
+    direction_s,
+    conditions_sourcePortRange_s,
+    conditions_destinationPortRange_s,
+    type_s,
+    ruleName_s
 | order by TimeGenerated desc
 ```
 
-**C. Denied SSH over time (5-min bins)**
+**D. Denied SSH Events: Source and Destination IPs, Port, and Action**
 ```kql
 AzureDiagnostics
 | where Category == "NetworkSecurityGroupEvent"
-| where destPort_s == "22" and action_s =~ "Deny"
-| summarize denies = count() by bin(TimeGenerated, 5m)
-| order by TimeGenerated asc
+| where conditions_destinationPortRange_s == "22" or conditions_destinationPortRange_s == "22-22"
+| where type_s =~ "block"
+| extend destPort = tostring(split(conditions_destinationPortRange_s, "-")[0])
+| project 
+    TimeGenerated,
+    primaryIPv4Address_s,   // Source IP
+    destPort,               // Destination Port (single value)
+    direction_s,
+    type_s,
+    ruleName_s
+| order by TimeGenerated desc
 ```
 
-#### ✅ Expected Example:
-
-| TimeGenerated       | srcIp\_s   | destIp\_s  | destPort\_s | action\_s | ruleName\_s     |
-| ------------------- | ---------- | ---------- | ----------- | --------- | --------------- |
-| 2025-06-19 12:02:10 | 10.100.1.4 | 10.100.2.5 | 22          | Deny      | deny-web-to-app |
+**E. Count the Denied/Allowed requests**
+```kql
+AzureDiagnostics
+| where Category == "NetworkSecurityGroupEvent"
+| summarize 
+    denied_count = countif(type_s =~ "block"),
+    allowed_count = countif(type_s =~ "allow")
+```
 
 ---
 
