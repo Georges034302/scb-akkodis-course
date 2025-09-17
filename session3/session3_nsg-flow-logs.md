@@ -178,10 +178,11 @@ ssh $ADMIN_USER@$VM_APP_PRIV
 STORAGE_ACCOUNT=$(az storage account list -g $RG --query "[0].name" -o tsv)
 
 # Dynamically get the container name for NSG flow logs
-CONTAINER=$(az storage.container.list --account-name $STORAGE_ACCOUNT --query "[?contains(name, 'flowlogflowevent')].name" -o tsv)
+# The correct Azure CLI command is 'az storage container list' (not 'az storage.container.list')
+CONTAINER=$(az storage container list --account-name $STORAGE_ACCOUNT --query "[?contains(name, 'flowlogflowevent')].name" -o tsv)
 
 # Get latest blob path
-BLOB_PATH=$(az storage.blob list \
+BLOB_PATH=$(az storage blob list \
   --account-name $STORAGE_ACCOUNT \
   --container-name $CONTAINER \
   --auth-mode login \
@@ -190,17 +191,13 @@ BLOB_PATH=$(az storage.blob list \
 echo "Latest flow log blob: $BLOB_PATH"
 
 # Download the blob (if found)
-if [ -n "$BLOB_PATH" ]; then
-  az storage.blob download \
-    --account-name $STORAGE_ACCOUNT \
-    --container-name $CONTAINER \
-    --name "$BLOB_PATH" \
-    --file ./flowlog.json \
-    --auth-mode login
-  echo "Downloaded flowlog.json"
-else
-  echo "No blob found. Wait a few minutes and try again."
-fi
+az storage blob download \
+  --account-name $STORAGE_ACCOUNT \
+  --container-name $CONTAINER \
+  --name "$BLOB_PATH" \
+  --file ./flowlog.json \
+  --auth-mode login
+echo "Downloaded flowlog.json"
 ```
 
 Then open `flowlog.json` locally to examine flow tuples.
