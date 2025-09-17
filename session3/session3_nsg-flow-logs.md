@@ -50,26 +50,46 @@ bash nsg_flow.sh
 
 ### 📦 Step 3: Enable Virtual Network Flow Logs (Manual)
 
-- Open **Azure Portal** and search for **Network Watcher**  
-- In the left panel, select **Logs > Flow Logs**  
-- Click **➕ Create**  
-  - **Basics Tab:**  
-    - **Flow log type:** `Virtual Network`  
-    - **Target Resource:** select `vnet-demo` (your deployed VNet)  
-    - **Location:** `australiaeast`  
-  - **Destination settings:**  
-    - **Storage account:** select the one created by your deployment (e.g., `flowlogstorageabcd1234`)  
-      - Do *not* accept a random auto-generated account (e.g., `flsay...`)  
-    - Assign the following roles to your signed-in identity (if not already granted):  
-      - `Storage Blob Data Contributor`  
-      - `Storage Blob Data Owner`  
-    - **Retention:** set to 30 days (or adjust per your policy)  
-  - **Analytics Tab:**  
-    - **Flow logs version:** `Version 2`  
-    - **Enable Traffic Analytics:** Yes  
-      - **Interval:** `10 minutes`  
-      - **Log Analytics workspace:** select `flowlog-law`  
-  - **Review + Create**  
+#### A: Send VNet flow logs to Log Analytics workspace
+
+1. Open the Azure Portal:
+   ```bash
+   "$BROWSER" https://portal.azure.com
+   ```
+2. Go to **Virtual Networks** and select `vnet-demo`.
+3. In the left menu, select **Diagnostic settings**.
+4. Click **+ Add diagnostic setting**.
+5. Name your setting (e.g., `flowlogs-to-law`).
+6. Check **Send to Log Analytics workspace** and select your workspace (e.g., `flowlog-law`).
+7. Optionally, also send to a storage account.
+8. Under **Log**, check **Flow logs**.
+9. Click **Save**.
+
+---
+
+#### B: Enable Network Watcher for VNet logs
+
+1. Open **Azure Portal** and search for **Network Watcher**.
+2. In the left panel, select **Logs > Flow Logs**.
+3. Click **➕ Create**.
+   - **Basics Tab:**
+     - **Flow log type:** `Virtual Network`
+     - **Target Resource:** select `vnet-demo` (your deployed VNet)
+     - **Location:** `australiaeast`
+   - **Destination settings:**
+     - **Storage account:** select the one created by your deployment (e.g., `flowlogstorageabcd1234`)
+       - Do *not* accept a random auto-generated account (e.g., `flsay...`)
+     - Assign the following roles to your signed-in identity (if not already granted):
+       - `Storage Blob Data Contributor`
+       - `Storage Blob Data Owner`
+     - **Retention:** set to 30 days (or adjust per your policy)
+   - **Analytics Tab:**
+     - **Flow logs version:** `Version 2`
+     - **Enable Traffic Analytics:** Yes
+       - **Interval:** `10 minutes`
+       - **Log Analytics workspace:** select `flowlog-law`
+   - **Review + Create**
+
 ---
 
 ### 🔍 Step 4: Post-Deployment Testing
@@ -154,10 +174,10 @@ ssh $ADMIN_USER@$VM_APP_PRIV
 STORAGE_ACCOUNT=$(az storage account list -g $RG --query "[0].name" -o tsv)
 
 # Dynamically get the container name for NSG flow logs
-CONTAINER=$(az storage container list --account-name $STORAGE_ACCOUNT --query "[?contains(name, 'flowlogflowevent')].name" -o tsv)
+CONTAINER=$(az storage.container.list --account-name $STORAGE_ACCOUNT --query "[?contains(name, 'flowlogflowevent')].name" -o tsv)
 
 # Get latest blob path
-BLOB_PATH=$(az storage blob list \
+BLOB_PATH=$(az storage.blob list \
   --account-name $STORAGE_ACCOUNT \
   --container-name $CONTAINER \
   --auth-mode login \
@@ -165,13 +185,18 @@ BLOB_PATH=$(az storage blob list \
 
 echo "Latest flow log blob: $BLOB_PATH"
 
-# Download locally
-az storage blob download \
-  --account-name $STORAGE_ACCOUNT \
-  --container-name $CONTAINER \
-  --name $BLOB_PATH \
-  --file ./flowlog.json \
-  --auth-mode login
+# Download the blob (if found)
+if [ -n "$BLOB_PATH" ]; then
+  az storage.blob download \
+    --account-name $STORAGE_ACCOUNT \
+    --container-name $CONTAINER \
+    --name "$BLOB_PATH" \
+    --file ./flowlog.json \
+    --auth-mode login
+  echo "Downloaded flowlog.json"
+else
+  echo "No blob found. Wait a few minutes and try again."
+fi
 ```
 
 Then open `flowlog.json` locally to examine flow tuples.
