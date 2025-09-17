@@ -256,42 +256,6 @@ done
 
 ---
 
-### 🔹 (Optional) Step 7: Add Email Notification to the Logic App
-
-**Goal:** Enable notifications using Logic App
-
-1. Go to Azure Portal > Logic Apps
-2. Open your Logic App: **DisableUserOnKVAlert**
-3. Under **Development Tools**, click **Logic App Designer**
-4. Inside the trigger block, you should already see:  
-   *When a response to a Microsoft Sentinel incident is triggered*
-5. Click **+ New Step**
-6. Search for **Outlook 365** or **Office 365 Outlook** (based on your connector)
-7. Select **Send an email (V2)**
-8. Fill in the email fields:
-
-   | Field   | Value                                                      |
-   |---------|------------------------------------------------------------|
-   | To      | your-soc-team@yourdomain.com                               |
-   | Subject | 🔐 Sentinel Alert: {{IncidentName}} - Severity {{Severity}}|
-   | Body    | Use dynamic fields:<br>Alert: {{IncidentName}}<br>Time: {{StartTimeUtc}}<br>User: {{UserPrincipalName}}<br>Description: {{Description}}<br>Check Sentinel for full details. |
-
-   🛠 If you used UPN in the query, use `@{triggerBody()?['Entities']?[0]?['UPN']}` in advanced expressions.
-
-9. Click **Save** in the Logic App toolbar.
-
----
-
-### 🔔 Now What Happens?
-
-When the "Excessive Secret Access" rule fires, Sentinel triggers your Logic App.
-
-Your Logic App:
-- Parses the incident entity.
-- Sends an email to your SOC team with dynamic incident data.
-
----
-
 ## ✅ Success Criteria
 
 | **Check**                             | **Expected Result**                             |
