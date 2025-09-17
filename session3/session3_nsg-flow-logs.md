@@ -34,7 +34,7 @@ az network watcher configure \
 az deployment group create \
   --resource-group rg-flow-lab \
   --template-file nsg_flow.bicep \
-  --parameters adminPassword='YourSecureP@ssword123'
+  --parameters adminPassword=$(read -s -p "Enter admin password: " pwd; echo $pwd)
 ```
 
 ---
@@ -72,48 +72,51 @@ bash nsg_flow.sh
 
 ### 🔍 Step 4: Post-Deployment Testing
 
-#### ✅ Get Private IP of vm-app
-
+#### Enviroment Variables:
 ```bash
-az vm show \
-  --resource-group rg-flow-lab \
-  --name vm-app \
-  --show-details \
-  --query privateIps -o tsv
+# Resource group and VM names
+RG=rg-flow-lab
+VM_WEB=vm-web
+VM_APP=vm-app
+ADMIN_USER=azureuser   # change if your template used a different username
 ```
 
-#### ❌ SSH into vm-app (Expected to Fail)
+#### Get Private & Public IPs 
 
 ```bash
-ssh azureuser@<vm-app-private-ip>
+# Get public IP of vm-web (jump host)
+VM_WEB_PIP=$(az vm show -g $RG -n $VM_WEB --show-details --query publicIps -o tsv)
+
+# Get private IP of vm-app (target of blocked SSH)
+VM_APP_PRIV=$(az vm show -g $RG -n $VM_APP --show-details --query privateIps -o tsv)
+
+# Display the results
+echo "vm-web public IP : $VM_WEB_PIP"
+echo "vm-app private IP: $VM_APP_PRIV"
+
 ```
 
-⏳ You should see a timeout or connection denied — verifying NSG is blocking the SSH traffic.
-
-#### ✅ Get Public IP of vm-web
+#### ❌ Test Direct SSH to vm-app (Expected to Fail)
 
 ```bash
-az vm show \
-  --resource-group rg-flow-lab \
-  --name vm-web \
-  --show-details \
-  --query publicIps \
-  -o tsv
+ssh $ADMIN_USER@$VM_APP_PRIV
 ```
+⏳ This should timeout or deny connection — confirming NSG is blocking SSH.
 
-#### ✅ SSH into vm-web (Expected to Succeed)
+
+#### ✅ Test SSH to vm-web (Expected to Succeed)
 
 ```bash
-ssh azureuser@<vm-web-public-ip>
+ssh $ADMIN_USER@$VM_WEB_PIP
 ```
+⏳ This should succeed — vm-web has a public IP with SSH allowed.
 
-#### ❌ SSH into vm-app from vm-web (Expected to Fail)
 
+#### ❌ From vm-web → vm-app (Expected to Fail)
 ```bash
-ssh azureuser@<vm-app-private-ip>
+ssh $ADMIN_USER@$VM_APP_PRIV
 ```
-
-⏳ You should see a timeout or connection denied — verifying NSG is blocking the SSH traffic even from within vm-web.
+⏳ Run this command inside vm-web after logging in. It should fail — proving the NSG blocks intra-VNet SSH traffic.
 
 ---
 
@@ -121,8 +124,8 @@ ssh azureuser@<vm-app-private-ip>
 
 #### 🔢 Option A: Using Azure Portal
 
-1. Go to **Storage accounts** > your account (e.g., `flsay...`) > **Containers**
-2. Open `insights-logs-networksecuritygroupflowevent`
+1. Go to Storage accounts → (name starts with flowlogstorage...). 
+2. Open `insights-nsg-flow-logs`
 3. Navigate into the folder structure: `year/month/day/hour`
 4. Open a JSON log blob and inspect entries like:
    ```
@@ -133,27 +136,28 @@ ssh azureuser@<vm-app-private-ip>
 #### 🔢 Option B: Using CLI
 
 ```bash
-# Get the conainer list in the storage account
-az storage container list \
-  --account-name flsay3lw6cr4y4mwq \
+# Get storage account name deployed in the resource group
+STORAGE_ACCOUNT=$(az storage account list -g $RG --query "[0].name" -o tsv)
+
+# Define the container
+CONTAINER="insights-nsg-flow-logs"
+
+# Get latest blob path
+BLOB_PATH=$(az storage blob list \
+  --account-name $STORAGE_ACCOUNT \
+  --container-name $CONTAINER \
   --auth-mode login \
-  --output table
+  --query "[-1].name" -o tsv)
 
-# Get the blob list in the container
-az storage blob list \
-  --account-name flsay3lw6cr4y4mwq \
-  --container-name <container name> \
-  --output table
-```
+echo "Latest flow log blob: $BLOB_PATH"
 
-(Optional) To download and inspect a specific log:
-
-```bash
+# Download locally
 az storage blob download \
-  --account-name flsay3lw6cr4y4mwq \
-  --container-name <conainer name> \
-  --name <blob-path> \
-  --file ./flowlog.json
+  --account-name $STORAGE_ACCOUNT \
+  --container-name $CONTAINER \
+  --name $BLOB_PATH \
+  --file ./flowlog.json \
+  --auth-mode login
 ```
 
 Then open `flowlog.json` locally to examine flow tuples.
@@ -162,7 +166,8 @@ Then open `flowlog.json` locally to examine flow tuples.
 
 ### 🥪 Step 5: Analyze Flow Logs with KQL in Log Analytics (Optional)
 
-**Goal:** Validate denied SSH traffic is visible in flow logs via KQL.
+After generating denied SSH attempts in Step 4, check the logs.
+> ⏳ Note: Flow Logs can take 15–20 minutes to appear (collection interval + pipeline delay).
 
 > Prerequisites:
 >
