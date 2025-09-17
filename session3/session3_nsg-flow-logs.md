@@ -65,6 +65,10 @@ bash nsg_flow.sh
 8. Under **Log**, check **Flow logs**.
 9. Click **Save**.
 
+> **Important:**  
+> For full visibility, repeat steps 1–9 above for your **Network Security Group** (e.g., `nsg-app`).  
+> This ensures that VNet and NSG are sending flow logs to Log Analytics workspace and storage account.
+
 ---
 
 #### B: Enable Network Watcher for VNet logs
@@ -220,6 +224,7 @@ After generating denied SSH attempts in Step 3, check the logs.
 - Select `flowlog-law` > **Logs**
 
 #### 2. Run KQL Queries:
+
 **A. Recent NSG flow events (quick view)**
 
 ```kql
