@@ -166,8 +166,9 @@ Then open `flowlog.json` locally to examine flow tuples.
 
 ### 🥪 Step 5: Analyze Flow Logs with KQL in Log Analytics (Optional)
 
-After generating denied SSH attempts in Step 4, check the logs.
-> ⏳ Note: Flow Logs can take 15–20 minutes to appear (collection interval + pipeline delay).
+After generating denied SSH attempts in Step 3, check the logs.
+> ⏳ Note: Flow Logs typically appear 15–20 minutes after traffic occurs (collection + pipeline delay).
+> Prereqs: Flow logs linked to flowlog-law, Traffic Analytics enabled..
 
 > Prerequisites:
 >
@@ -179,20 +180,38 @@ After generating denied SSH attempts in Step 4, check the logs.
 - Go to **Log Analytics Workspaces** in Azure Portal
 - Select `flowlog-law` > **Logs**
 
-#### 2. Run KQL:
+#### 2. Run KQL Queries:
+**A. Recent NSG flow events (quick view)**
 
 ```kql
 AzureDiagnostics
 | where Category == "NetworkSecurityGroupEvent"
-| project TimeGenerated, type_s, direction_s, primaryIPv4Address_s, ruleName_s
+| project TimeGenerated, srcIp_s, destIp_s, destPort_s, protocol_s, action_s, ruleName_s
+| order by TimeGenerated desc
+```
+**B. Denied SSH from vm-web → vm-app (most relevant)**
+```kql
+AzureDiagnostics
+| where Category == "NetworkSecurityGroupEvent"
+| where destPort_s == "22" and protocol_s =~ "TCP" and action_s =~ "Deny"
+| project TimeGenerated, srcIp_s, destIp_s, destPort_s, action_s, ruleName_s
 | order by TimeGenerated desc
 ```
 
-#### ✅ Expected:
+**C. Denied SSH over time (5-min bins)**
+```kql
+AzureDiagnostics
+| where Category == "NetworkSecurityGroupEvent"
+| where destPort_s == "22" and action_s =~ "Deny"
+| summarize denies = count() by bin(TimeGenerated, 5m)
+| order by TimeGenerated asc
+```
 
-| TimeGenerated       | SrcIP\_s   | DstIP\_s   | Dport\_s | FlowType\_s | VM\_s  |
-| ------------------- | ---------- | ---------- | -------- | ----------- | ------ |
-| 2025-06-19 12:02:10 | 10.100.1.4 | 10.100.2.5 | 22       | Blocked     | vm-web |
+#### ✅ Expected Example:
+
+| TimeGenerated       | srcIp\_s   | destIp\_s  | destPort\_s | action\_s | ruleName\_s     |
+| ------------------- | ---------- | ---------- | ----------- | --------- | --------------- |
+| 2025-06-19 12:02:10 | 10.100.1.4 | 10.100.2.5 | 22          | Deny      | deny-web-to-app |
 
 ---
 
