@@ -91,26 +91,27 @@ POLICY_NAME=require-tag-any
 if az policy definition show --name $POLICY_NAME >/dev/null 2>&1; then
   az policy definition update \
     --name $POLICY_NAME \
-    --rules @session1/azure-access-control/require-tag/definition/policy.json \
+    --rules @azure-access-control/require-tag/definition/policy.json \
     --mode Indexed \
     --display-name "Require Tag on Resources" \
     --description "Deny creation of resources without required tag."
 else
   az policy definition create \
     --name $POLICY_NAME \
-    --rules @session1/azure-access-control/require-tag/definition/policy.json \
+    --rules @azure-access-control/require-tag/definition/policy.json \
     --mode Indexed \
     --display-name "Require Tag on Resources" \
     --description "Deny creation of resources without required tag."
 fi
 
-# 2) Assign via Bicep
+# 2) Assign via Bicep using parameters.json
 POLICY_DEF_ID=$(az policy definition show --name $POLICY_NAME --query id -o tsv)
 
 az deployment sub create \
   --location $LOCATION \
-  --template-file session1/azure-access-control/require-tag/assignment/assign.bicep \
-  --parameters policyDefinitionId="$POLICY_DEF_ID" requiredTagName=owner \
+  --template-file azure-access-control/require-tag/assignment/assign.bicep \
+  --parameters @azure-access-control/require-tag/assignment/assign-enforce-tags.parameters.json \
+  --parameters policyDefinitionId="$POLICY_DEF_ID" \
   --name enforce-required-tag-deployment
 ```
 
