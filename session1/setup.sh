@@ -1,92 +1,89 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# setup_env.sh — Minimal common environment setup for Session 1 Labs
+# 1. Exports RG, SUBSCRIPTION_ID, LOCATION, TENANT_ID into .env and sources it
+# 2. Creates the project structure for azure-access-control labs
+# 3. Ensures the common Azure Resource Group exists (demo-rg by default)
+# ⚠️ Add ".env" to your .gitignore before committing!
+
 set -euo pipefail
 
-# Unset Actions token if present (avoid gh using it)
-unset GITHUB_TOKEN || true
+# Defaults
+LOCATION="${LOCATION:-australiaeast}"
+RG="${RG:-demo-rg}"
 
-# ---- Auth materials ----
-if [[ -f .env ]]; then
-  # shellcheck disable=SC1091
-  source .env
-else
-  echo "ERROR: .env not found. Create it with: export ADMIN_TOKEN=yourPAT" >&2
+# Optional tag (helps if Require-Tag policy is enabled); override via env if desired
+TAG_KEY="${TAG_KEY:-owner}"
+TAG_VALUE="${TAG_VALUE:-georges}"
+
+info()  { echo -e "🔵 \033[1;34m[INFO]\033[0m $*"; }
+error() { echo -e "❌ \033[1;31m[ERR ]\033[0m $*" >&2; }
+success() { echo -e "✅ \033[1;32m[SUCCESS]\033[0m $*"; }
+
+# --- 1) Sanity checks ---
+if ! command -v az >/dev/null 2>&1; then
+  error "Azure CLI not found. Install from https://aka.ms/azcli"
   exit 1
 fi
-: "${ADMIN_TOKEN:?ERROR: ADMIN_TOKEN not set in .env}"
 
-# ---- GitHub CLI auth ----
-gh auth logout --hostname github.com >/dev/null 2>&1 || true
-echo "$ADMIN_TOKEN" | gh auth login --with-token --hostname github.com >/dev/null
-gh auth status --hostname github.com --show-token >/dev/null || { echo "ERROR: gh auth failed"; exit 1; }
-
-# ---- Azure context ----
-az account show >/dev/null 2>&1 || { echo "ERROR: run 'az login' first"; exit 1; }
-AZ_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-AZ_TENANT_ID=$(az account show --query tenantId -o tsv)
-az account set --subscription "$AZ_SUBSCRIPTION_ID"
-
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
-APP_NAME="github-actions-policy-demo-${RANDOM}"
-
-# ---- App registration (idempotent) ----
-EXISTING_APP_ID=$(az ad app list --display-name "$APP_NAME" --query '[0].appId' -o tsv)
-if [[ -z "${EXISTING_APP_ID}" ]]; then
-  echo "Creating app: $APP_NAME"
-  az ad app create --display-name "$APP_NAME" --enable-id-token-issuance true --sign-in-audience AzureADMyOrg --only-show-errors >/dev/null
-  AZ_CLIENT_ID=$(az ad app list --display-name "$APP_NAME" --query '[0].appId' -o tsv)
-else
-  AZ_CLIENT_ID="$EXISTING_APP_ID"
-  echo "App exists: $APP_NAME ($AZ_CLIENT_ID)"
+if ! az account show >/dev/null 2>&1; then
+  error "You are not logged in. Run: az login"
+  exit 1
 fi
 
-# ---- Service principal (idempotent) ----
-if ! az ad sp show --id "$AZ_CLIENT_ID" --only-show-errors >/dev/null 2>&1; then
-  echo "Creating service principal for $AZ_CLIENT_ID"
-  az ad sp create --id "$AZ_CLIENT_ID" --only-show-errors >/dev/null
-fi
+# --- 2) Capture subscription + tenant ---
+SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+TENANT_ID="$(az account show --query tenantId -o tsv)"
 
-# ---- Federated credential (idempotent) ----
-FC_NAME="github-actions-federated-credential"
-if ! az ad app federated-credential list --id "$AZ_CLIENT_ID" --query "[?name=='$FC_NAME']" -o tsv | grep -q .; then
-  echo "Adding federated credential for repo $REPO (main)"
-  az ad app federated-credential create --id "$AZ_CLIENT_ID" --parameters "{
-    \"name\": \"$FC_NAME\",
-    \"issuer\": \"https://token.actions.githubusercontent.com\",
-    \"subject\": \"repo:$REPO:ref:refs/heads/main\",
-    \"description\": \"GitHub Actions OIDC federated credential for main branch\",
-    \"audiences\": [\"api://AzureADTokenExchange\"]
-  }" >/dev/null
-fi
+info "Subscription: $SUBSCRIPTION_ID"
+info "Tenant:       $TENANT_ID"
+info "Location:     $LOCATION"
+info "ResourceGroup (common): $RG"
 
-# ---- Role assignments (idempotent) ----
-assign_role() {
-  local role="$1"
-  local scope="/subscriptions/$AZ_SUBSCRIPTION_ID"
-  if ! az role assignment list --assignee "$AZ_CLIENT_ID" --role "$role" --scope "$scope" --query "[0]" -o tsv | grep -q .; then
-    echo "Assigning role: $role"
-    az role assignment create --assignee "$AZ_CLIENT_ID" --role "$role" --scope "$scope" --only-show-errors >/dev/null
-  fi
-}
-assign_role "Contributor"
-assign_role "Resource Policy Contributor"
-
-# ---- Repo secrets ----
-gh secret set AZURE_CLIENT_ID -b"$AZ_CLIENT_ID" >/dev/null
-gh secret set AZURE_TENANT_ID -b"$AZ_TENANT_ID" >/dev/null
-gh secret set AZURE_SUBSCRIPTION_ID -b"$AZ_SUBSCRIPTION_ID" >/dev/null
-
-# ---- Propagation wait (short) ----
-echo "Waiting 15s for role assignment propagation..."
-sleep 15
-
-cat <<EOF
-
-OIDC ready for GitHub Actions.
-
-AZURE_CLIENT_ID:        $AZ_CLIENT_ID
-AZURE_TENANT_ID:        $AZ_TENANT_ID
-AZURE_SUBSCRIPTION_ID:  $AZ_SUBSCRIPTION_ID
-Federated Credential:   $FC_NAME (repo: $REPO, branch: main)
-
-Use these in your workflow with azure/login@v1.
+# --- 3) Export to .env (only the requested vars) ---
+ENV_FILE=".env"
+cat > "$ENV_FILE" <<EOF
+# Auto-generated by setup_env.sh
+export LOCATION="$LOCATION"
+export SUBSCRIPTION_ID="$SUBSCRIPTION_ID"
+export TENANT_ID="$TENANT_ID"
+export RG="$RG"
 EOF
+
+echo ".env" >> .gitignore
+
+success "Wrote environment file: $ENV_FILE"
+
+# --- 4) Source .env so values are ready ---
+# shellcheck disable=SC1090
+source "$ENV_FILE"
+success "Sourced $ENV_FILE. Environment ready."
+
+# --- 6) Ensure common Azure Resource Group exists ---
+info "Ensuring common Resource Group '$RG' in '$LOCATION' (with tag $TAG_KEY=$TAG_VALUE)..."
+az group create -n "$RG" -l "$LOCATION" --tags "$TAG_KEY=$TAG_VALUE" >/dev/null
+success "Resource Group ready: $RG ($LOCATION)"
+
+# --- 5) Create project structure (empty files) ---
+ROOT="azure-access-control"
+
+info "Project structure: $ROOT/ ..."
+tree -L 3 "$ROOT" || true  # Ignore if tree not installed
+# # Allowed VM Sizes
+# mkdir -p "$ROOT/allowed-vm-sizes/definition"
+# mkdir -p "$ROOT/allowed-vm-sizes/assignment"
+# mkdir -p "$ROOT/allowed-vm-sizes/scripts"
+# touch "$ROOT/allowed-vm-sizes/definition/policy.json"
+# touch "$ROOT/allowed-vm-sizes/assignment/assign.bicep"
+# touch "$ROOT/allowed-vm-sizes/assignment/parameters.json"
+
+# # Require Tag
+# mkdir -p "$ROOT/require-tag/definition"
+# mkdir -p "$ROOT/require-tag/assignment"
+# mkdir -p "$ROOT/require-tag/scripts"
+# touch "$ROOT/require-tag/definition/policy.json"
+# touch "$ROOT/require-tag/assignment/assign.bicep"
+# touch "$ROOT/require-tag/assignment/parameters.json"
+
+# success "Project structure created under $ROOT/ 🎉"
+
+
