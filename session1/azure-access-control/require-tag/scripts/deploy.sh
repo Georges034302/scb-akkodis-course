@@ -1,38 +1,72 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LOCATION=australiaeast
-POLICY_NAME=require-tag-any
+LOCATION="${LOCATION:-australiaeast}"
+POLICY_NAME="require-tag-any"
 
-echo "🔵 Checking for existing policy definition: $POLICY_NAME ..."
+RULES="azure-access-control/require-tag/definition/rules.json"
+DEFINITION_PARAMS="azure-access-control/require-tag/definition/parameters.json"   # schema (no $schema)
+BICEP="azure-access-control/require-tag/assignment/assign.bicep"
+ASSIGNMENT_PARAMS="azure-access-control/require-tag/assignment/parameters.json"  # values (has $schema)
+
+say() { printf '🔵 %s\n' "$*"; }
+die() { printf '❌ %s\n' "$*" >&2; exit 1; }
+
+# ---------- Preflight ----------
+[ -f "$RULES" ]            || die "Missing $RULES"
+[ -f "$DEFINITION_PARAMS" ]|| die "Missing $DEFINITION_PARAMS"
+[ -f "$BICEP" ]            || die "Missing $BICEP"
+
+# rules.json must ONLY contain the rule (no displayName/mode/parameters)
+grep -q '"displayName"' "$RULES" && die "rules.json must contain only the if/then rule."
+
+# Definition params must be schema (no $schema / no top-level 'parameters')
+if grep -q '"$schema"' "$DEFINITION_PARAMS"; then
+  die "Definition params must be a policy schema (no \$schema / no top-level 'parameters')."
+fi
+
+# ---------- Create or update policy definition ----------
+say "Checking for existing policy definition: $POLICY_NAME ..."
 if az policy definition show --name "$POLICY_NAME" >/dev/null 2>&1; then
-  echo "📝 Updating existing policy definition: $POLICY_NAME"
+  say "Updating policy definition: $POLICY_NAME"
   az policy definition update \
     --name "$POLICY_NAME" \
-    --rules @azure-access-control/require-tag/definition/policy.json \
+    --rules @"$RULES" \
+    --params @"$DEFINITION_PARAMS" \
     --mode Indexed \
     --display-name "Require Tag on Resources" \
     --description "Deny creation of resources without required tag."
 else
-  echo "🆕 Creating new policy definition: $POLICY_NAME"
+  say "Creating policy definition: $POLICY_NAME"
   az policy definition create \
     --name "$POLICY_NAME" \
-    --rules @azure-access-control/require-tag/definition/policy.json \
+    --rules @"$RULES" \
+    --params @"$DEFINITION_PARAMS" \
     --mode Indexed \
     --display-name "Require Tag on Resources" \
     --description "Deny creation of resources without required tag."
 fi
 
-echo "🔎 Fetching policy definition ID ..."
-POLICY_DEF_ID=$(az policy definition show --name "$POLICY_NAME" --query id -o tsv)
-echo "✅ Policy Definition ID: $POLICY_DEF_ID"
+# ---------- Assign at subscription scope via Bicep ----------
+say "Fetching policy definition ID ..."
+POLICY_DEF_ID="$(az policy definition show --name "$POLICY_NAME" --query id -o tsv)"
+[ -n "$POLICY_DEF_ID" ] || die "Could not read policy definition id."
+say "Policy Definition ID: $POLICY_DEF_ID"
 
-echo "🚀 Deploying policy assignment via Bicep with parameters file ..."
-az deployment sub create \
-  --location "$LOCATION" \
-  --template-file azure-access-control/require-tag/assignment/assign.bicep \
-  --parameters @azure-access-control/require-tag/assignment/assign-enforce-tags.parameters.json \
-  --parameters policyDefinitionId="$POLICY_DEF_ID" \
-  --name enforce-required-tag-deployment
+say "Deploying policy assignment via Bicep ..."
+if [ -f "$ASSIGNMENT_PARAMS" ]; then
+  az deployment sub create \
+    --location "$LOCATION" \
+    --template-file "$BICEP" \
+    --parameters @"$ASSIGNMENT_PARAMS" \
+    --parameters policyDefinitionId="$POLICY_DEF_ID" \
+    --name enforce-required-tag-deployment
+else
+  az deployment sub create \
+    --location "$LOCATION" \
+    --template-file "$BICEP" \
+    --parameters policyDefinitionId="$POLICY_DEF_ID" requiredTagName="owner" \
+    --name enforce-required-tag-deployment
+fi
 
-echo "🎉 Deployment complete!"
+printf '✅ Deployment complete!\n'

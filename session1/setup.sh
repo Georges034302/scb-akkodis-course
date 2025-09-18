@@ -72,7 +72,7 @@ tree -L 3 "$ROOT" || true  # Ignore if tree not installed
 # mkdir -p "$ROOT/allowed-vm-sizes/definition"
 # mkdir -p "$ROOT/allowed-vm-sizes/assignment"
 # mkdir -p "$ROOT/allowed-vm-sizes/scripts"
-# touch "$ROOT/allowed-vm-sizes/definition/policy.json"
+# touch "$ROOT/allowed-vm-sizes/definition/rules.json"
 # touch "$ROOT/allowed-vm-sizes/assignment/assign.bicep"
 # touch "$ROOT/allowed-vm-sizes/assignment/parameters.json"
 
@@ -80,7 +80,7 @@ tree -L 3 "$ROOT" || true  # Ignore if tree not installed
 # mkdir -p "$ROOT/require-tag/definition"
 # mkdir -p "$ROOT/require-tag/assignment"
 # mkdir -p "$ROOT/require-tag/scripts"
-# touch "$ROOT/require-tag/definition/policy.json"
+# touch "$ROOT/require-tag/definition/rules.json"
 # touch "$ROOT/require-tag/assignment/assign.bicep"
 # touch "$ROOT/require-tag/assignment/parameters.json"
 

@@ -10,7 +10,8 @@ Require an `owner` tag on **every** resource using **Policy** + **Bicep**, deplo
 session1/azure-access-control/
 └── require-tag/
     ├── definition/
-    │   └── policy.json
+    │   └── rules.json
+    │   └── parameters.json
     ├── assignment/
     │   └── assign.bicep
     └── scripts/
@@ -18,63 +19,55 @@ session1/azure-access-control/
 
 ---
 
-## 📄 Policy Definition — `session1/azure-access-control/require-tag/definition/policy.json`
+## 📄 Policy Definition — `rules.json`
 ```json
 {
-  "properties": {
-    "displayName": "Require Tag on Resources",
-    "mode": "Indexed",
-    "description": "Deny creation of resources that do not include the required tag.",
-    "parameters": {
-      "requiredTagName": {
-        "type": "String",
-        "metadata": {
-          "displayName": "Required Tag Name",
-          "description": "Name of the tag that must be present on resources."
-        }
-      }
-    },
-    "policyRule": {
-      "if": {
-        "field": "[concat('tags[', parameters('requiredTagName'), ']')]",
-        "exists": "false"
-      },
-      "then": { "effect": "deny" }
-    }
-  }
+  "if": {
+    "allOf": [
+      { "field": "type", "equals": "Microsoft.Compute/virtualMachines" },
+      { "field": "Microsoft.Compute/virtualMachines/sku.name", "notIn": "[parameters('listOfAllowedSKUs')]" }
+    ]
+  },
+  "then": { "effect": "deny" }
 }
 ```
 
 ---
 
-## 📄 Policy Assignment (Bicep) — `session1/azure-access-control/require-tag/assignment/assign.bicep`
+## 📄 Policy Assignment (Bicep) — `assign.bicep`
 ```bicep
-param policyDefinitionId string
-param requiredTagName string = 'owner'
-param scope string = subscription().id
+targetScope = 'subscription'
 
-resource policyAssignment 'Microsoft.Authorization/policyAssignments@2021-06-01' = {
-  name: 'enforce-required-tag'
+param policyDefinitionId string
+param listOfAllowedSKUs array = [
+  'Standard_B1s'
+  'Standard_B2s'
+]
+
+resource pa 'Microsoft.Authorization/policyAssignments@2021-06-01' = {
+  name: 'enforce-allowed-vm-sizes'
   properties: {
-    displayName: 'Enforce Required Tag'
-    scope: scope
+    displayName: 'Enforce Allowed VM Sizes'
     policyDefinitionId: policyDefinitionId
     enforcementMode: 'Default'
     parameters: {
-      requiredTagName: { value: requiredTagName }
+      listOfAllowedSKUs: {
+        value: listOfAllowedSKUs
+      }
     }
   }
 }
 ```
 
-*(Optional)* `session1/azure-access-control/require-tag/assignment/assign-enforce-tags.parameters.json`
+*(Optional)* `parameters.json`
 ```json
 {
-  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
-  "contentVersion": "1.0.0.0",
-  "parameters": {
-    "policyDefinitionId": { "value": "" },
-    "requiredTagName": { "value": "owner" }
+  "listOfAllowedSKUs": {
+    "type": "Array",
+    "metadata": {
+      "displayName": "Allowed VM Sizes",
+      "description": "List of permitted SKU names for virtual machines."
+    }
   }
 }
 ```
@@ -84,54 +77,74 @@ resource policyAssignment 'Microsoft.Authorization/policyAssignments@2021-06-01'
 ## 🚀 Deploy (Terminal Only)
 ```bash
 set -euo pipefail
-LOCATION=australiaeast
-POLICY_NAME=require-tag-any
+LOCATION="${LOCATION:-australiaeast}"
+POLICY_NAME="allowed-vm-sizes-lab"
+RULES="azure-access-control/allowed-vm-sizes/definition/rules.json"
+PARAMS="azure-access-control/allowed-vm-sizes/definition/parameters.json"
+BICEP="azure-access-control/allowed-vm-sizes/assignment/assign.bicep"
 
 # 1) Create or update the definition
-if az policy definition show --name $POLICY_NAME >/dev/null 2>&1; then
+if az policy definition show --name "$POLICY_NAME" >/dev/null 2>&1; then
+  echo "📝 Updating existing policy definition: $POLICY_NAME"
   az policy definition update \
-    --name $POLICY_NAME \
-    --rules @azure-access-control/require-tag/definition/policy.json \
+    --name "$POLICY_NAME" \
+    --rules @"$RULES" \
+    --params @"$PARAMS" \
     --mode Indexed \
-    --display-name "Require Tag on Resources" \
-    --description "Deny creation of resources without required tag."
+    --display-name "Allowed VM Sizes (Cost Control)" \
+    --description "Restrict VM creation to approved SKUs only."
 else
+  echo "🆕 Creating new policy definition: $POLICY_NAME"
   az policy definition create \
-    --name $POLICY_NAME \
-    --rules @azure-access-control/require-tag/definition/policy.json \
+    --name "$POLICY_NAME" \
+    --rules @"$RULES" \
+    --params @"$PARAMS" \
     --mode Indexed \
-    --display-name "Require Tag on Resources" \
-    --description "Deny creation of resources without required tag."
+    --display-name "Allowed VM Sizes (Cost Control)" \
+    --description "Restrict VM creation to approved SKUs only."
 fi
 
-# 2) Assign via Bicep using parameters.json
-POLICY_DEF_ID=$(az policy definition show --name $POLICY_NAME --query id -o tsv)
+# 2) Fetching policy definition ID
+POLICY_DEF_ID=$(az policy definition show --name "$POLICY_NAME" --query id -o tsv)
 
+# 3) Deploying policy assignment via Bicep 
 az deployment sub create \
-  --location $LOCATION \
-  --template-file azure-access-control/require-tag/assignment/assign.bicep \
-  --parameters @azure-access-control/require-tag/assignment/assign-enforce-tags.parameters.json \
+  --location "$LOCATION" \
+  --template-file "$BICEP" \
   --parameters policyDefinitionId="$POLICY_DEF_ID" \
-  --name enforce-required-tag-deployment
+  --name enforce-allowed-vm-sizes-deployment
 ```
 
 ---
 
 ## 🧪 Validation
 ```bash
-# Expect DENY (missing tag)
-az group create -n demo-untagged-rg -l australiaeast
+# Create VM with disallowed size
+if az vm create \
+  -g "$RG" \
+  -n disallowedVm \
+  --image Ubuntu2204 \
+  --size Standard_D2s_v5 \
+  --admin-username azureuser \
+  --generate-ssh-keys; then
+  echo "❌ Policy did NOT block disallowed VM size! Please check your policy assignment."
+else
+  echo "✅ Policy correctly denied creation of disallowed VM size."
+fi
 
-# Expect ALLOW (tag present)
-az group create -n demo-tagged-rg -l australiaeast --tags owner=georges
+# Ceate allowed VM (should SUCCEED)
+if az vm create \
+  -g "$RG" \
+  -n allowedVm \
+  --image Ubuntu2204 \
+  --size Standard_B1s \
+  --admin-username azureuser \
+  --generate-ssh-keys; then
+  echo "✅ Allowed VM size created successfully."
+else
+  echo "❌ Failed to create allowed VM size. Please check your policy and permissions."
+fi
 
-# Verify assignment exists
-az policy assignment list --query "[?name=='enforce-required-tag']" -o table
-
-# Inspect compliance (propagation may take a few minutes)
-az policy state list \
-  --filter "PolicyAssignmentName eq 'enforce-required-tag'" \
-  --query "[].{resource:resourceId, compliance:complianceState}" -o table
 ```
 
 ---

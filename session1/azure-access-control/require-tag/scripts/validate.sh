@@ -1,30 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RG_UNTAGGED=demo-untagged-rg
-RG_TAGGED=demo-tagged-rg
-LOCATION=australiaeast
+LOCATION="${LOCATION:-australiaeast}"
+RG="${RG:-demo-rg}"
 
-echo "🔵 Attempting to create resource group WITHOUT required tag (should be DENIED)..."
-if az group create -n "$RG_UNTAGGED" -l "$LOCATION"; then
-  echo "❌ Policy did NOT block untagged resource group! Please check your policy assignment."
+# Optional tag (helps if Require-Tag policy is enabled); override via env if desired
+TAG_KEY="${TAG_KEY:-owner}"
+TAG_VALUE="${TAG_VALUE:-georges}"
+
+echo "❌ Attempting to create untagged storage account (should be DENIED by policy)..."
+if az storage account create \
+  -n "untagged$RANDOM" \
+  -g "$RG" \
+  -l "$LOCATION" \
+  --sku Standard_LRS; then
+  echo "❌ Policy did NOT block untagged storage account! Please check your policy assignment."
 else
-  echo "✅ Policy correctly denied creation of untagged resource group."
+  echo "✅ Policy correctly denied creation of untagged storage account."
 fi
 
-echo "🟢 Attempting to create resource group WITH required tag (should be ALLOWED)..."
-if az group create -n "$RG_TAGGED" -l "$LOCATION" --tags owner=georges; then
-  echo "✅ Tagged resource group created successfully."
+echo "✅ Attempting to create tagged storage account (should SUCCEED)..."
+if az storage account create \
+  -n "tagged$RANDOM" \
+  -g "$RG" \
+  -l "$LOCATION" \
+  --sku Standard_LRS \
+  --tags "$TAG_KEY=$TAG_VALUE"; then
+  echo "✅ Tagged storage account created successfully."
 else
-  echo "❌ Failed to create tagged resource group. Please check your policy and permissions."
+  echo "❌ Failed to create tagged storage account. Please check your policy and permissions."
 fi
-
-echo "🔍 Verifying policy assignment exists..."
-az policy assignment list --query "[?name=='enforce-required-tag']" -o table
-
-echo "🔍 Inspecting compliance state (may take a few minutes to propagate)..."
-az policy state list \
-  --filter "PolicyAssignmentName eq 'enforce-required-tag'" \
-  --query "[].{resource:resourceId, compliance:complianceState}" -o table
 
 echo "🎉 Validation complete!"

@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RG=vm-lab-rg
-LOCATION=australiaeast
+LOCATION="${LOCATION:-australiaeast}"
+RG="${RG:-demo-rg}"
 
-echo "🔵 Creating resource group: $RG ..."
-az group create -n "$RG" -l "$LOCATION"
+# Optional tag (helps if Require-Tag policy is enabled); override via env if desired
+TAG_KEY="${TAG_KEY:-owner}"
+TAG_VALUE="${TAG_VALUE:-georges}"
+
+az group create -n "$RG" -l "$LOCATION" --tags "$TAG_KEY=$TAG_VALUE" >/dev/null
 
 echo "❌ Attempting to create disallowed VM (should be DENIED by policy)..."
 if az vm create \
