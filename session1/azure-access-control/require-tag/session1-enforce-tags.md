@@ -1,20 +1,24 @@
 # 🛠️ Azure Policy as Code (Require Tag) with Bicep (no CI/CD)
 
 ## 🎯 Objective  
-Require an `owner` tag on **every** resource using **Policy** + **Bicep**, deployed from your terminal.
+Require an `owner` tag on **every** resource using **Azure Policy** + **Bicep**, deployed from your terminal.
 
 ---
 
 ## 🗂️ Project Structure
 ```
-session1/azure-access-control/
+azure-access-control/
 └── require-tag/
-    ├── definition/
-    │   ├── rules.json
-    │   └── parameters.json
     ├── assignment/
     │   └── assign.bicep
-    └── scripts/
+    ├── definition/
+    │   ├── parameters.json
+    │   └── rules.json
+    ├── scripts/
+    │   ├── deploy.sh
+    │   ├── validate.sh
+    │   └── cleanup.sh
+    └── session1-enforce-tags.md
 ```
 
 ---
@@ -74,14 +78,15 @@ resource assignment 'Microsoft.Authorization/policyAssignments@2021-06-01' = {
 ## 🚀 Deploy (Terminal Only)
 ```bash
 set -euo pipefail
-LOCATION=australiaeast
-POLICY_NAME=require-tag-any
+LOCATION="${LOCATION:-australiaeast}"
+POLICY_NAME="require-tag-any"
 RULES="azure-access-control/require-tag/definition/rules.json"
 PARAMS="azure-access-control/require-tag/definition/parameters.json"
 BICEP="azure-access-control/require-tag/assignment/assign.bicep"
 
 # 1) Create or update the definition
 if az policy definition show --name "$POLICY_NAME" >/dev/null 2>&1; then
+  echo "📝 Updating existing policy definition: $POLICY_NAME"
   az policy definition update \
     --name "$POLICY_NAME" \
     --rules @"$RULES" \
@@ -90,6 +95,7 @@ if az policy definition show --name "$POLICY_NAME" >/dev/null 2>&1; then
     --display-name "Require Tag on Resources" \
     --description "Deny creation of resources without required tag."
 else
+  echo "🆕 Creating new policy definition: $POLICY_NAME"
   az policy definition create \
     --name "$POLICY_NAME" \
     --rules @"$RULES" \

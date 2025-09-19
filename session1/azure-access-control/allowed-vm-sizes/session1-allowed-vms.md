@@ -1,25 +1,29 @@
-# 🛠️ Azure Policy as Code (Require Tag) with Bicep (no CI/CD)
+# 🛠️ Azure Policy as Code (Allowed VM Sizes) with Bicep (no CI/CD)
 
 ## 🎯 Objective  
-Require an `owner` tag on **every** resource using **Policy** + **Bicep**, deployed from your terminal.
+Restrict VM creation to **approved SKUs** (e.g., `Standard_B1s`, `Standard_B2s`) using **Policy** + **Bicep**, deployed from your terminal.
 
 ---
 
 ## 🗂️ Project Structure
 ```
 session1/azure-access-control/
-└── require-tag/
+└── allowed-vm-sizes/
     ├── definition/
-    │   └── rules.json
+    │   ├── rules.json
     │   └── parameters.json
     ├── assignment/
     │   └── assign.bicep
-    └── scripts/
+    ├── scripts/
+    │   ├── deploy.sh
+    │   ├── validate.sh
+    │   └── cleanup.sh
+    └── session1-allowed-vms.md
 ```
 
 ---
 
-## 📄 Policy Definition — `rules.json`
+## 📄 Policy Rule — `definition/rules.json`
 ```json
 {
   "if": {
@@ -34,7 +38,22 @@ session1/azure-access-control/
 
 ---
 
-## 📄 Policy Assignment (Bicep) — `assign.bicep`
+## 📄 Policy Parameters — `definition/parameters.json`
+```json
+{
+  "listOfAllowedSKUs": {
+    "type": "Array",
+    "metadata": {
+      "displayName": "Allowed VM Sizes",
+      "description": "List of permitted SKU names for virtual machines."
+    }
+  }
+}
+```
+
+---
+
+## 📄 Policy Assignment (Bicep) — `assignment/assign.bicep`
 ```bicep
 targetScope = 'subscription'
 
@@ -54,19 +73,6 @@ resource pa 'Microsoft.Authorization/policyAssignments@2021-06-01' = {
       listOfAllowedSKUs: {
         value: listOfAllowedSKUs
       }
-    }
-  }
-}
-```
-
-*(Optional)* `parameters.json`
-```json
-{
-  "listOfAllowedSKUs": {
-    "type": "Array",
-    "metadata": {
-      "displayName": "Allowed VM Sizes",
-      "description": "List of permitted SKU names for virtual machines."
     }
   }
 }
@@ -119,7 +125,9 @@ az deployment sub create \
 
 ## 🧪 Validation
 ```bash
-# Create VM with disallowed size
+RG="${RG:-demo-rg}"
+
+echo "❌ Attempting to create disallowed VM (should be DENIED by policy)..."
 if az vm create \
   -g "$RG" \
   -n disallowedVm \
@@ -132,7 +140,7 @@ else
   echo "✅ Policy correctly denied creation of disallowed VM size."
 fi
 
-# Ceate allowed VM (should SUCCEED)
+echo "✅ Attempting to create allowed VM (should SUCCEED)..."
 if az vm create \
   -g "$RG" \
   -n allowedVm \
@@ -145,6 +153,7 @@ else
   echo "❌ Failed to create allowed VM size. Please check your policy and permissions."
 fi
 
+echo "🎉 Validation complete!"
 ```
 
 ---
@@ -152,13 +161,13 @@ fi
 ## 🧹 Cleanup
 ```bash
 az group delete -n demo-rg -y
-az policy assignment delete --name enforce-required-tag
-az policy definition delete --name require-tag-any
+az policy assignment delete --name enforce-allowed-vm-sizes
+az policy definition delete --name allowed-vm-sizes-lab
 ```
 
 ---
 
 ## ✅ Key Learnings
-- Tag enforcement strengthens governance  
-- Parameterized for flexibility
+- VM SKU enforcement helps control costs and governance  
+- Parameterized policy for flexibility
 
