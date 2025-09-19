@@ -5,11 +5,11 @@ SCB Azure Training Series by Akkodis. Includes slide decks and lab guides for si
 <details>
 <summary><strong>Session 1 – Demo</strong> (click to expand/hide)</summary>
 
-### 🧪 [Enforce Required Tags with Azure Policy, Bicep & GitHub Actions](session1/session1-enforce-tags.md)
+### 🧪 [Enforce Required Tags with Azure Policy, Bicep & GitHub Actions](session1/azure-access-control/require-tag/session1-enforce-tags.md)
 - **Objective:** Require an `owner` tag on every Azure resource using Azure Policy as code, Bicep for assignment, and GitHub Actions for deployment.
 - **Topics:** Policy as code, Bicep, OIDC, GitHub Actions, tag governance.
 
-### 🧪 [Restrict VM SKUs with Azure Policy](session1/session1-allowed-vms.md)
+### 🧪 [Restrict VM SKUs with Azure Policy](session1/azure-access-control/allowed-vm-sizes/session1-allowed-vms.md)
 - **Objective:** Restrict allowed VM SKUs in a subscription using Azure Policy.
 - **Topics:** Policy definition, assignment, compliance validation.
 
