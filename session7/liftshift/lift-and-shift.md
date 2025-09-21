@@ -2,6 +2,8 @@
 
 This lab demonstrates a **simulated lift-and-shift migration** in Azure using snapshots and managed disks. Instead of creating a new VM from scratch, you will capture a source VM, create a disk from its snapshot, and deploy a new VM from that disk — representing the "migrated" workload.
 
+<img width="1536" height="1024" alt="LiftandShift" src="https://github.com/user-attachments/assets/0816afe1-ba42-4737-a5c9-0e6301e9a4ec" />
+
 ## 🎯 Objectives
 - Understand Lift & Shift (Rehost) as the fastest migration strategy with minimal changes.  
 - Learn how to simulate migration by **cloning a VM** using snapshot and disk operations.  
