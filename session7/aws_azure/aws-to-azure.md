@@ -227,7 +227,7 @@ ssh azureuser@"$PUBLIC_IP" hostname
 # Expected: aws-migrated-vm-$SUFFIX
 ```
 
-> If your EC2 was a web server (Apache/Nginx), test in browser: `http://$PUBLIC_IP`
+>Test the migrated EC2 web-app deployed on HTTP Apache server: `http://$PUBLIC_IP`
 
 ---
 
