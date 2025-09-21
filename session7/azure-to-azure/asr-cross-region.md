@@ -3,6 +3,8 @@
 This lab demonstrates a **simulated on‑prem → Azure migration** using **Azure Site Recovery (ASR)** across Australian regions.  
 You will prepare a **source environment in Australia East** and a **target (DR) environment in Australia Southeast**, enable replication for a source VM, run a **Test Failover**, and then perform a **Planned Failover (cutover)**.
 
+<img width="1536" height="1024" alt="asr-cross-region" src="https://github.com/user-attachments/assets/76693d77-9cc4-4847-a96e-7265e6aa0f0b" />
+
 > **What you’ll learn:** ASR concepts (vault, replicated items, test failover vs planned failover), cross‑region mapping, and safe validation practices.
 
 ---
