@@ -1,1 +1,12 @@
 .env
+*lab*.env
+*.env
+.env.local
+.env.*.local
+.env.test
+.env.production
+.env.*.test
+.env.*.production
+.env.*.staging
+.env.*.development
+.env.*.local
