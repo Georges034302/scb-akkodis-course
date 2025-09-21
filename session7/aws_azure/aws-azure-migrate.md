@@ -1,4 +1,4 @@
-# Lab 3: AWS to Azure Migration with Azure Migrate
+# Lab 3-B: AWS to Azure Migration with Azure Migrate
 
 This lab demonstrates a **cross-cloud migration** using **Azure Migrate: Server Migration**. You will configure Azure Migrate to connect to AWS, discover workloads, assess readiness, and replicate VMs into Azure for cutover.
 
