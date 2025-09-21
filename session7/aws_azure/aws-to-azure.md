@@ -1,6 +1,7 @@
-# Lab 3: AWS to Azure Migration (EC2 Export → Azure Import)
+# Lab 3-A: AWS to Azure Migration (EC2 Export → Azure Import)
 
 This lab demonstrates a **real cross‑cloud migration** by exporting an AWS EC2 instance (web server) to a VHD, copying it to Azure Blob Storage, and creating a VM from that disk in Azure.
+
 <img width="1536" height="1024" alt="AWS-Azure--VHD-migration" src="https://github.com/user-attachments/assets/e0c666fd-15b8-4f9d-b6c6-e75297b1cdaa" />
 
 
