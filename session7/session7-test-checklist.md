@@ -7,9 +7,9 @@ This file provides a **step-by-step validation guide** for all Session 7 migrati
 ## **Lab 1 – Lift & Shift Migration (Snapshot + Disk)**  
 1. **Run env.sh**  
    ```bash
-   ./env.sh login
-   ./env.sh init
-   ./env.sh status
+   ./lab1-env.sh login
+   ./lab1-env.sh init
+   ./lab1-env.sh status
    ```  
    ✅ RG, VNet, Subnet, NSG all “exists”  
 
@@ -36,7 +36,7 @@ This file provides a **step-by-step validation guide** for all Session 7 migrati
 
 8. **Cleanup**  
    ```bash
-   ./env.sh cleanup
+   ./lab1-env.sh cleanup
    ```  
    ✅ Resource group delete in progress  
 
