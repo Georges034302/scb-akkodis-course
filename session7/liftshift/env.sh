@@ -17,7 +17,7 @@ CREATE_NSG="${CREATE_NSG:-true}"                  # true|false
 NSG_NAME="${NSG_NAME:-nsg-migrate}"
 SSH_SOURCE="${SSH_SOURCE:-0.0.0.0/0}"             # "auto" to detect your /32
 
-HANDOFF_FILE="${HANDOFF_FILE:-liftshift/.lab.env}"
+HANDOFF_FILE="${HANDOFF_FILE:-.lab.env}"
 
 # Ensure the handoff file is git-ignored
 if [ -d "$(dirname "$HANDOFF_FILE")" ]; then
@@ -211,6 +211,10 @@ cleanup() {
   need_az; ensure_login
   echo "Deleting resource group '${RESOURCE_GROUP}' (no-wait)..."
   az group delete -n "${RESOURCE_GROUP}" --yes --no-wait
+  if [ -f "${HANDOFF_FILE}" ]; then
+    rm -f "${HANDOFF_FILE}"
+    echo "🧹 Deleted handoff file: ${HANDOFF_FILE}"
+  fi
   echo "🧹 Cleanup started."
 }
 
