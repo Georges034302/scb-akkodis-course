@@ -1,51 +1,69 @@
-# Lab: On-Prem to Azure Migration (ASR)
+# Lab 2: On‑Prem to Azure Migration with Azure Site Recovery (ASR)
 
-This lab demonstrates a simulated **on-premises to Azure migration** using **Azure Site Recovery (ASR)**.  
-A VM acts as the "on-prem source" (in Australia East) and is replicated into Azure using a Recovery Services Vault (in Australia Southeast).  
-You will configure replication, run a test failover, then perform a planned failover (cutover) to complete the migration.
+This lab demonstrates a **simulated on‑prem → Azure migration** using **Azure Site Recovery (ASR)** across Australian regions.  
+You will prepare a **source environment in Australia East** and a **target (DR) environment in Australia Southeast**, enable replication for a source VM, run a **Test Failover**, and then perform a **Planned Failover (cutover)**.
+
+> **What you’ll learn:** ASR concepts (vault, replicated items, test failover vs planned failover), cross‑region mapping, and safe validation practices.
 
 ---
 
 ## 🎯 Objectives
-- Learn how ASR replicates workloads into Azure.  
-- Configure a **cross-region Recovery Services Vault** (Australia East → Australia Southeast).  
-- Perform **Test Failover** to validate migration safely.  
-- Perform **Planned Failover (cutover)** to complete the migration.  
-- Validate the migrated VM via SSH.  
+- Provision **source** resources (AE) and **target** resources (ASEA) for ASR.
+- Create a **source VM** that represents the on‑prem workload.
+- Enable **replication** to the target region via a **Recovery Services Vault**.
+- Run **Test Failover** (no impact) and **Planned Failover** (cutover).
+- Validate the migrated VM with SSH.
+- Clean up resources safely.
 
 ---
 
-## 🛠️ Steps
+## ✅ Pre‑reqs
+- Azure CLI logged in (the script will check)  
+- Region policy allows **Australia East** and **Australia Southeast**  
+- Network egress for SSH (22) from your client IP
 
-### 1. Login and Initialize Environment
-Run from the course folder:
+---
+
+## 1) Login & Initialize Environment
+
+Run from the Session 7 folder. This script prepares **both** sides for ASR:
+- **Source (AE):** `rg-migrate-demo`, `vnet-migrate`, `subnet-migrate`, optional `nsg-migrate`  
+- **Target (ASEA):** `rg-migrate-target` (Vault), `migrateVaultSEA` (RSV), `rg-migrate-demo-asr`, `vnet-migrate-asr`, `subnet-migrate`
+
 ```bash
-cd /workspaces/scb-akkodis-course/session7
+chmod +x lab2-env.sh
 
-chmod +x env.sh
+# Login only if necessary
+./lab2-env.sh login
 
-./env.sh login
+# Create/Ensure both source & target infra
+./lab2-env.sh init
 
-./env.sh init
+# Verify
+./lab2-env.sh status
 
-./env.sh status
+# Optional: lock SSH to your /32 and re-run init
+# SSH_SOURCE=auto ./lab2-env.sh init
 ```
-This creates the **source environment** in `australiaeast` with:
-- Resource group: `rg-migrate-demo`  
-- VNet: `vnet-migrate`  
-- Subnet: `subnet-migrate`  
-- NSG: `nsg-migrate`  
+
+A **handoff file** is written to `lab2/.lab.env` with useful IDs. Load it when needed:
+```bash
+source lab2/.lab.env
+```
 
 ---
 
-### 2. Create a Source VM (Simulating On-Prem)
-This VM represents the on-premises workload that we will replicate.
+## 2) Create the Source VM (Simulated On‑Prem, in Australia East)
+
+Use a suffix to avoid collisions in classrooms:
+
 ```bash
+export SUFFIX=$RANDOM
 read -s -p "Enter a secure password for the VM admin user: " ADMIN_PASSWORD && echo
 
 az vm create \
   --resource-group rg-migrate-demo \
-  --name source-vm \
+  --name source-vm-$SUFFIX \
   --image Ubuntu2204 \
   --size Standard_B1s \
   --admin-username azureuser \
@@ -54,299 +72,210 @@ az vm create \
   --vnet-name vnet-migrate \
   --subnet subnet-migrate \
   --nsg nsg-migrate
+
+# Quick probe: expect 'Succeeded'
+az vm show -g rg-migrate-demo -n source-vm-$SUFFIX --query "provisioningState" -o tsv
 ```
 
 ---
 
-### 3. Create a Target Resource Group and Recovery Services Vault (in Australia Southeast)
-ASR requires the vault to be in a **different region** for cross-region DR.
+## 3) Create the Target Resource Group & Recovery Services Vault (Australia Southeast)
 
-1. Create the target RG in Australia Southeast:
-    ```bash
-    az group create \
-      --name rg-migrate-target \
-      --location australiasoutheast
-    ```
+Your `lab2-env.sh init` already created these, but if you want to double‑check or (re)create manually:
 
-2. Create the Recovery Services Vault in Australia Southeast:
-    ```bash
-    az backup vault create \
-      --name migrateVaultSEA \
-      --resource-group rg-migrate-target \
-      --location australiasoutheast
-    ```
+```bash
+az group create --name rg-migrate-target --location australiasoutheast
+
+az backup vault create \
+  --name migrateVaultSEA \
+  --resource-group rg-migrate-target \
+  --location australiasoutheast
+```
+
+> The **vault** hosts ASR metadata and policies; **replicated items** will ultimately live in `rg-migrate-demo-asr` against the target VNet `vnet-migrate-asr` (both created by the environment script).
 
 ---
 
-### 4. Enable Replication (Portal Steps)
+## 4) Enable Replication (Portal)
 
-In the Azure portal:
+Use the Azure Portal for the ASR wizard (easiest for learners):
 
-1. Go to **Resource groups** → **rg-migrate-target** → **migrateVaultSEA**.
-2. In the vault menu, select **Site Recovery**.
-3. Under **Azure virtual machines**, click **Enable replication**.
+1. Go to **Resource groups → rg-migrate-target → migrateVaultSEA**.  
+2. In the vault, select **Site Recovery**.  
+3. Under **Azure virtual machines**, choose **Enable replication**.
 
-**Wizard pages:**
+**Wizard inputs:**
 
 **(1) Source**
 - **Source region:** Australia East
-- **Source resource group:** rg-migrate-demo
-- **Deployment model:** Resource Manager
-- **VM to replicate:** source-vm  
-Click **Next**.
+- **Source resource group:** `rg-migrate-demo`
+- **VM to replicate:** `source-vm-$SUFFIX`
+- Deployment model: Resource Manager → **Next**
 
 **(2) Virtual machines**
-- Select **source-vm**.  
-Click **Next**.
+- Select `source-vm-$SUFFIX` → **Next**
 
 **(3) Replication settings**
 - **Target location:** Australia Southeast
-- **Target subscription:** Azure subscription 1
-- **Target resource group:** (new) rg-migrate-demo-asr (create new)
-- **Failover virtual network:** (new) vnet-migrate-asr (region = Australia Southeast, address space e.g. 10.20.0.0/16)
-- **Failover subnet:** (new) subnet-migrate (10.20.1.0/24)
-- **Storage:** leave default (configured per VM)
-- **Availability options:** None
-- **Capacity reservation:** leave unassigned (0 of 1 machines)  
-Click **Next**.
+- **Target resource group:** `rg-migrate-demo-asr` (create if not present)
+- **Failover virtual network:** `vnet-migrate-asr` (region = Australia Southeast, address space `10.20.0.0/16`)
+- **Failover subnet:** `subnet-migrate` (`10.20.1.0/24`)
+- Storage/Availability options: defaults are fine → **Next**
 
 **(4) Manage**
-- **Replication policy:** choose 24-hour-retention-policy (or Create new if unavailable)
-- **Replication group:** leave blank unless you need multi-VM consistency (not required here)
-- **Extension settings:** select Allow ASR to manage (recommended)
-- **Automation account:** create new, e.g. migrateVa-mxq-asr-automationaccount  
-Click **Next**.
+- **Replication policy:** e.g., `24-hour-retention-policy` (create if not present)
+- **Extension settings:** Allow ASR to manage (recommended)
+- **Automation account:** create new if prompted (e.g., `migrateVaultSEA-aa`) → **Next**
 
 **(5) Review**
-- Confirm **Source:** Australia East (rg-migrate-demo/source-vm) → **Target:** Australia Southeast (rg-migrate-demo-asr/vnet-migrate-asr)
-- **Replication policy:** 24-hour-retention-policy
-- **Automation account:** migrateVa-mxq-asr-automationaccount  
-Click **Enable replication**.
+- Confirm AE → ASEA mapping and settings → **Enable replication**
 
-Replication begins. Monitor progress under **Site Recovery → Replicated items → source-vm**.
+Monitor progress in **Site Recovery → Replicated items → source-vm-$SUFFIX**. Wait until the item shows **Protected** (Initial sync complete).
 
 ---
 
-### 5. Run Test Failover (Portal Steps)
+## 5) Test Failover (No‑Impact Validation)
 
-This step creates a safe copy of the source VM in the target region (**Australia Southeast**) so you can validate migration without impacting production.
+Create an isolated, temporary VM copy in **ASEA** to verify that failover works.
 
-1. In the Azure portal, go to **Resource groups → rg-migrate-target → migrateVaultSEA**.
-2. In the vault menu, navigate to **Site Recovery → Replicated items**.
-3. Select **source-vm**.
-4. From the top menu, click **Test Failover**.
-5. Configure:
-    - **Failover direction:** Australia East → Australia Southeast
-    - **Target resource group:** rg-migrate-demo-asr
-    - **Target network:** vnet-migrate-asr
-    - **Target subnet:** subnet-migrate
-6. Confirm with **OK** to start the test failover.
+1. In the vault (**migrateVaultSEA**), open **Site Recovery → Replicated items → source-vm-$SUFFIX**.  
+2. Click **Test Failover**.  
+3. Configure:
+   - **Failover direction:** Australia East → Australia Southeast
+   - **Target resource group:** `rg-migrate-demo-asr`
+   - **Target network:** `vnet-migrate-asr`
+   - **Target subnet:** `subnet-migrate`
+4. Confirm to start the test failover.
 
-When complete:
-- A **test VM** will be created in Australia Southeast.
-- Under **Replicated items**, select the test failover VM to view its details and copy the public IP address.
+When complete: a **test VM** appears in `rg-migrate-demo-asr`. If the test VM lacks a public IP/NSG:
+```bash
+# Find NIC name
+NIC_ID=$(az vm show --resource-group rg-migrate-demo-asr \
+  --name source-vm-$SUFFIX --query "networkProfile.networkInterfaces[0].id" -o tsv)
+NIC_NAME=$(basename "$NIC_ID")
 
-**If the test VM does not have a public IP:**
+# Public IP
+az network public-ip create \
+  --resource-group rg-migrate-demo-asr \
+  --name source-vm-$SUFFIX-pip
 
-a. Get the NIC name dynamically:
-   ```bash
-   NIC_ID=$(az vm show \
-     --resource-group rg-migrate-demo-asr \
-     --name source-vm \
-     --query "networkProfile.networkInterfaces[0].id" \
-     -o tsv)
-   NIC_NAME=$(basename "$NIC_ID")
-   ```
+# Attach PIP (replace ipconfig name if different)
+az network nic ip-config update \
+  --resource-group rg-migrate-demo-asr \
+  --nic-name "$NIC_NAME" \
+  --name ipconfigsource-vm-$SUFFIX \
+  --public-ip-address source-vm-$SUFFIX-pip
 
-b. Create a public IP:
-   ```bash
-   az network public-ip create \
-     --resource-group rg-migrate-demo-asr \
-     --name source-vm-pip
-   ```
+# Optional: create/attach NSG to allow SSH if needed
+az network nsg create \
+  --resource-group rg-migrate-demo-asr \
+  --name asr-ssh-nsg \
+  --location australiasoutheast
 
-c. Associate the public IP with the NIC (confirm the NIC and ipconfig names first):
-   ```bash
-   az network nic show \
-     --resource-group rg-migrate-demo-asr \
-     --name "$NIC_NAME" \
-     --query "ipConfigurations[].name" \
-     -o table
-   # Use the actual name from the output, e.g., ipconfigsource-vm
-   az network nic ip-config update \
-     --resource-group rg-migrate-demo-asr \
-     --nic-name "$NIC_NAME" \
-     --name ipconfigsource-vm \
-     --public-ip-address source-vm-pip
-   ```
+az network nsg rule create \
+  --resource-group rg-migrate-demo-asr \
+  --nsg-name asr-ssh-nsg \
+  --name allow-ssh \
+  --priority 1000 \
+  --access Allow --protocol Tcp --direction Inbound \
+  --source-address-prefixes 0.0.0.0/0 \
+  --destination-port-ranges 22
 
-d. Get the actual public IP address:
-   ```bash
-   TEST_IP=$(az network.public-ip show \
-     --resource-group rg-migrate-demo-asr \
-     --name source-vm-pip \
-     --query "ipAddress" \
-     -o tsv)
-   ```
+az network vnet subnet update \
+  --resource-group rg-migrate-demo-asr \
+  --vnet-name vnet-migrate-asr \
+  --name subnet-migrate \
+  --network-security-group asr-ssh-nsg
+```
 
-e. Allow SSH in VM NSG:
-   ```bash
-   # Create a new NSG
-   az network nsg create \
-    --resource-group rg-migrate-demo-asr \
-    --name asr-ssh-nsg \
-    --location australiasoutheast
+Connect to the test VM to validate boot and login:
+```bash
+TEST_IP=$(az network.public-ip show \
+  --resource-group rg-migrate-demo-asr \
+  --name source-vm-$SUFFIX-pip \
+  --query "ipAddress" -o tsv)
 
-   # Allow SSH in the new NSG
-  az network nsg rule create \
-    --resource-group rg-migrate-demo-asr \
-    --nsg-name asr-ssh-nsg \
-    --name allow-ssh \
-    --priority 1000 \
-    --access Allow \
-    --protocol Tcp \
-    --direction Inbound \
-    --source-address-prefixes 0.0.0.0/0 \
-    --destination-port-ranges 22
+ssh azureuser@"$TEST_IP" hostname
+# Quick check expected: source-vm-$SUFFIX (or similar)
+```
 
-   # Attach the NSG to the subnet
-  az network vnet subnet update \
-    --resource-group rg-migrate-demo-asr \
-    --vnet-name vnet-migrate-asr \
-    --name subnet-migrate \
-    --network-security-group asr-ssh-nsg
-   ```
-
-f. Connect to the test VM using SSH:
-   ```bash
-   ssh azureuser@"$TEST_IP"
-   ```
+> When done, use **Cleanup test failover** in the portal to remove temporary artifacts for the test.
 
 ---
 
-### 6. Run Planned Failover (Cutover)
+## 6) Planned Failover (Cutover)
 
-This step completes the migration by shutting down the source VM in **Australia East** and promoting the replica in **Australia Southeast** as the new primary workload.
+This is the **real cutover**. It shuts down the source and promotes the replica in ASEA.
 
-1. **Stop the source VM** (so no new writes occur):
-    ```bash
-    az vm deallocate \
-      --resource-group rg-migrate-demo \
-      --name source-vm
-    ```
+1. **Deallocate the source VM** in AE to stop writes (simulated cutover trigger):
+   ```bash
+   az vm deallocate -g rg-migrate-demo -n source-vm-$SUFFIX
+   ```
+2. In the vault (**migrateVaultSEA**) → **Site Recovery → Replicated items → source-vm-$SUFFIX**.  
+3. Click **Planned Failover** and confirm:
+   - **Direction:** Australia East → Australia Southeast  
+   - **Target RG:** `rg-migrate-demo-asr`  
+   - **Target VNet/Subnet:** `vnet-migrate-asr` / `subnet-migrate`  
+4. Start the failover and monitor until complete.
 
-2. In the Azure portal, navigate to **Resource groups → rg-migrate-target → migrateVaultSEA → Site Recovery → Replicated items**.
-
-3. Select **source-vm**.
-
-4. From the top menu, click **Planned Failover**.
-
-5. In the dialog, confirm:
-    - **Failover direction:** Australia East → Australia Southeast
-    - **Target resource group:** rg-migrate-demo-asr
-    - **Target virtual network:** vnet-migrate-asr
-    - **Target subnet:** subnet-migrate
-
-6. Start the failover.
-
-ASR will:
-- Perform a final sync of changes from **source-vm**.
-- Shut down **source-vm** in Australia East.
-- Bring up the replicated VM in Australia Southeast inside **rg-migrate-demo-asr** and **vnet-migrate-asr**.
-
-When finished, you can validate that the new VM is running and accessible via SSH using the same credentials.
+ASR will finalize sync, stop the source VM, and bring up the **replicated VM** in `rg-migrate-demo-asr` (ASEA).
 
 ---
 
-### 7. Validate the Migrated VM
+## 7) Validate the Migrated VM (ASEA)
 
-Get the public IP of the replicated VM created by the Planned Failover:
+Get the public IP of the failover VM (attach one if not present as in Step 5).
 
 ```bash
 REPL_IP=$(az vm list -d \
   --resource-group rg-migrate-demo-asr \
-  --query "[0].publicIps" \
-  -o tsv)
+  --query "[0].publicIps" -o tsv)
 
-ssh azureuser@"$REPL_IP"
+# Quick command mode (prints hostname then disconnects)
+ssh azureuser@"$REPL_IP" hostname
+
+# Or open an interactive shell:
+# ssh azureuser@"$REPL_IP"
 ```
 
-Log in using the same password you set in Step 2 (source-vm creation).
-
-Run a quick check to confirm the VM is functional:
-
+Optional deeper checks:
 ```bash
+# Inside the VM:
 hostname
-lsb_release -a
+lsb_release -a || cat /etc/os-release
 ```
 
 ---
 
-### 8. Cleanup (Optional)
-Remove all resources created in this lab:
+## 8) Cleanup
 
+Two parts:
+
+**A) Target resources (ASEA) — lab‑scoped**  
 ```bash
-# Run environment cleanup script (if available)
-./env.sh cleanup
+# Removes target ASR RG (replicated items etc.)
+az group delete -n rg-migrate-demo-asr --yes --no-wait
 
-# Delete the target resource group
-az group delete \
-  --name rg-migrate-target \
-  --yes \
-  --no-wait
-
-# Deallocate and delete the replicated VM (if still present)
-az vm deallocate \
-  --resource-group rg-migrate-demo-asr \
-  --name source-vm
-
-az vm delete \
-  --resource-group rg-migrate-demo-asr \
-  --name source-vm \
-  --yes
-
-# Delete the network interface (must be detached from VM first)
-az network nic delete \
-  --resource-group rg-migrate-demo-asr \
-  --name source-vmVMNic
-
-# Delete the public IP
-az network public-ip delete \
-  --resource-group rg-migrate-demo-asr \
-  --name source-vm-pip
-
-# Delete the NSG (if you created one for SSH)
-az network nsg delete \
-  --resource-group rg-migrate-demo-asr \
-  --name asr-ssh-nsg
-
-# Delete the subnet or VNet if needed
-# az network vnet subnet delete \
-#   --resource-group rg-migrate-demo-asr \
-#   --vnet-name vnet-migrate-asr \
-#   --name subnet-migrate
-
-# az network vnet delete \
-#   --resource-group rg-migrate-demo-asr \
-#   --name vnet-migrate-asr
-
-# Delete any disk replicas if present
-# az disk delete \
-#   --resource-group rg-migrate-demo-asr \
-#   --name <disk-name> \
-#   --yes
-
-# Delete any snapshots or images referencing the disk
-# az snapshot delete -g <resource-group> -n <snapshotName>
-# az image delete -g <resource-group> -n <imageName>
+# Removes the vault RG (Recovery Services Vault)
+az group delete -n rg-migrate-target --yes --no-wait
 ```
+
+**B) Source resources (AE) — optional**  
+If you want to also remove the source landing zone created for this lab:
+```bash
+DELETE_SOURCE_ON_CLEANUP=true ./lab2-env.sh cleanup
+# (or) az group delete -n rg-migrate-demo --yes --no-wait
+```
+
+> **Tip:** If you plan to re‑run the lab soon, you can keep the source RG to save time.
 
 ---
 
 ## 📘 Notes
-- **ASR requires cross-region DR** for non-zonal VMs. That’s why the vault and target RG are in `australiasoutheast`.  
-- **Test Failover** = validation without impacting the source VM.  
-- **Planned Failover** = final migration cutover.  
-- This lab simulates **on-prem → Azure** with a cross-region rehost scenario.  
+- **Test Failover** is safe and **does not impact** the source workload.  
+- **Planned Failover** is the **cutover** — it stops the source and promotes the target.  
+- Cross‑region used here: **Australia East → Australia Southeast**.  
+- Network security and public IP on the target are **not guaranteed by ASR**; attach an NSG/PIP as needed for SSH validation.  
+- The provided `lab2-env.sh` mirrors your Lab 1 style and ensures idempotent provisioning across both regions.
 
-✅ **End of Lab** — you have completed an On-Prem to Azure migration using ASR (Australia East → Australia Southeast).
+✅ **End of Lab** — you’ve completed an on‑prem to Azure migration using Azure Site Recovery (ASR).
