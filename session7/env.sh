@@ -17,7 +17,16 @@ CREATE_NSG="${CREATE_NSG:-true}"                  # true|false
 NSG_NAME="${NSG_NAME:-nsg-migrate}"
 SSH_SOURCE="${SSH_SOURCE:-0.0.0.0/0}"             # "auto" to detect your /32
 
-HANDOFF_FILE="${HANDOFF_FILE:-.lab.env}"
+HANDOFF_FILE="${HANDOFF_FILE:-liftshift/.lab.env}"
+
+# Ensure the handoff file is git-ignored
+if [ -d "$(dirname "$HANDOFF_FILE")" ]; then
+  GITIGNORE_FILE="$(dirname "$HANDOFF_FILE")/.gitignore"
+  HANDOFF_BASENAME="$(basename "$HANDOFF_FILE")"
+  if ! grep -qxF "$HANDOFF_BASENAME" "$GITIGNORE_FILE" 2>/dev/null; then
+    echo "$HANDOFF_BASENAME" >> "$GITIGNORE_FILE"
+  fi
+fi
 
 trap 'echo "❌ Error on line $LINENO. Exiting."; exit 1' ERR
 

@@ -29,7 +29,17 @@ Use a unique suffix to avoid collisions in multi-student sessions:
 export SUFFIX=$RANDOM
 read -s -p "Enter a secure password for the VM admin user: " ADMIN_PASSWORD && echo
 
-az vm create   --resource-group rg-migrate-demo   --name source-vm-$SUFFIX   --image Ubuntu2204   --size Standard_B1s   --admin-username azureuser   --admin-password "$ADMIN_PASSWORD"   --authentication-type password   --vnet-name vnet-migrate   --subnet subnet-migrate   --nsg nsg-migrate
+az vm create \
+  --resource-group rg-migrate-demo \
+  --name source-vm-$SUFFIX \
+  --image Ubuntu2204 \
+  --size Standard_B1s \
+  --admin-username azureuser \
+  --admin-password "$ADMIN_PASSWORD" \
+  --authentication-type password \
+  --vnet-name vnet-migrate \
+  --subnet subnet-migrate \
+  --nsg nsg-migrate
 ```
 
 ---
@@ -37,7 +47,9 @@ az vm create   --resource-group rg-migrate-demo   --name source-vm-$SUFFIX   --i
 ### 3. Stop the Source VM
 
 ```bash
-az vm deallocate   -g rg-migrate-demo   -n source-vm-$SUFFIX
+az vm deallocate \
+  -g rg-migrate-demo \
+  -n source-vm-$SUFFIX
 ```
 
 ---
@@ -45,9 +57,16 @@ az vm deallocate   -g rg-migrate-demo   -n source-vm-$SUFFIX
 ### 4. Snapshot the OS Disk
 
 ```bash
-SOURCE_DISK=$(az vm show   -g rg-migrate-demo   -n source-vm-$SUFFIX   --query "storageProfile.osDisk.managedDisk.id"   -o tsv)
+SOURCE_DISK=$(az vm show \
+  -g rg-migrate-demo \
+  -n source-vm-$SUFFIX \
+  --query "storageProfile.osDisk.managedDisk.id" \
+  -o tsv)
 
-az snapshot create   -g rg-migrate-demo   -n source-snap-$SUFFIX   --source "$SOURCE_DISK"
+az snapshot create \
+  -g rg-migrate-demo \
+  -n source-snap-$SUFFIX \
+  --source "$SOURCE_DISK"
 
 # Verify
 az snapshot show -g rg-migrate-demo -n source-snap-$SUFFIX --query "provisioningState"
@@ -58,7 +77,10 @@ az snapshot show -g rg-migrate-demo -n source-snap-$SUFFIX --query "provisioning
 ### 5. Create a Managed Disk from Snapshot
 
 ```bash
-az disk create   -g rg-migrate-demo   -n migrated-disk-$SUFFIX   --source source-snap-$SUFFIX
+az disk create \
+  -g rg-migrate-demo \
+  -n migrated-disk-$SUFFIX \
+  --source source-snap-$SUFFIX
 
 # Verify
 az disk show -g rg-migrate-demo -n migrated-disk-$SUFFIX --query "provisioningState"
@@ -71,7 +93,15 @@ az disk show -g rg-migrate-demo -n migrated-disk-$SUFFIX --query "provisioningSt
 ```bash
 read -s -p "Enter a secure password for the migrated VM admin user: " ADMIN_PASSWORD && echo
 
-az vm create   --resource-group rg-migrate-demo   --name migrated-vm-$SUFFIX   --attach-os-disk migrated-disk-$SUFFIX   --os-type Linux   --size Standard_B1s   --vnet-name vnet-migrate   --subnet subnet-migrate   --nsg nsg-migrate
+az vm create \
+  --resource-group rg-migrate-demo \
+  --name migrated-vm-$SUFFIX \
+  --attach-os-disk migrated-disk-$SUFFIX \
+  --os-type Linux \
+  --size Standard_B1s \
+  --vnet-name vnet-migrate \
+  --subnet subnet-migrate \
+  --nsg nsg-migrate
 ```
 
 ---
@@ -81,7 +111,11 @@ az vm create   --resource-group rg-migrate-demo   --name migrated-vm-$SUFFIX   -
 ```bash
 ./env.sh status
 
-PUBLIC_IP=$(az vm show -d   --resource-group rg-migrate-demo   --name migrated-vm-$SUFFIX   --query publicIps   -o tsv)
+PUBLIC_IP=$(az vm show -d \
+  --resource-group rg-migrate-demo \
+  --name migrated-vm-$SUFFIX \
+  --query publicIps \
+  -o tsv)
 
 ssh azureuser@"$PUBLIC_IP" hostname
 # Expected: migrated-vm-$SUFFIX
