@@ -174,6 +174,7 @@ az network nsg create \
   --name asr-ssh-nsg \
   --location australiasoutheast
 
+# Add SSH - allow rule
 az network nsg rule create \
   --resource-group rg-migrate-demo-asr \
   --nsg-name asr-ssh-nsg \
@@ -196,6 +197,7 @@ TEST_IP=$(az network.public-ip show \
   --resource-group rg-migrate-demo-asr \
   --name source-vm-$SUFFIX-pip \
   --query "ipAddress" -o tsv)
+echo "Test VM IP: $TEST_IP"
 
 ssh azureuser@"$TEST_IP" hostname
 # Quick check expected: source-vm-$SUFFIX (or similar)
@@ -232,6 +234,7 @@ Get the public IP of the failover VM (attach one if not present as in Step 5).
 REPL_IP=$(az vm list -d \
   --resource-group rg-migrate-demo-asr \
   --query "[0].publicIps" -o tsv)
+echo "Migrated VM IP: $REPL_IP"
 
 # Quick command mode (prints hostname then disconnects)
 ssh azureuser@"$REPL_IP" hostname
