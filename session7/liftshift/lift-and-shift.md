@@ -29,7 +29,7 @@ Run from the `session7` folder:
 Use a unique suffix to avoid collisions in multi-student sessions:
 
 ```bash
-export SUFFIX=$RANDOM
+SUFFIX=$RANDOM # Random value to attach to VM components
 read -s -p "Enter a secure password for the VM admin user: " ADMIN_PASSWORD && echo
 
 az vm create \
@@ -47,7 +47,7 @@ az vm create \
 
 ---
 
-### 3. Stop the Source VM
+### 3. Stop the Source VM – Simulate Cutover Point
 
 ```bash
 az vm deallocate \
@@ -119,6 +119,7 @@ PUBLIC_IP=$(az vm show -d \
   --name migrated-vm-$SUFFIX \
   --query publicIps \
   -o tsv)
+echo "Target VM: $PUBLIC_IP"
 
 ssh azureuser@"$PUBLIC_IP" hostname
 # Expected: migrated-vm-$SUFFIX
