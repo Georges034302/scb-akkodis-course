@@ -69,13 +69,13 @@ export SUFFIX=$RANDOM
 ```
 
 ```bash
+export SUFFIX=$RANDOM
 read -s -p "Enter a secure password for the VM admin user: " ADMIN_PASSWORD && echo
-```
 
-```bash
 az vm create \
   --resource-group rg-migrate-source \
   --name source-vm-$SUFFIX \
+  --location australiaeast \
   --image Ubuntu2204 \
   --size Standard_B1s \
   --admin-username azureuser \
@@ -106,7 +106,9 @@ Use the Azure Portal for the ASR wizard (easiest for learners):
 - **Source region:** Australia East
 - **Source resource group:** `rg-migrate-source`
 - **VM to replicate:** `source-vm-$SUFFIX`
-- Deployment model: Resource Manager → **Next**
+- Deployment model: Resource Manager 
+- Disaster recovery between availability zones → **Yes**
+- Click → **Next**
 
 **(2) Virtual machines**
 - Select `source-vm-$SUFFIX` → **Next**

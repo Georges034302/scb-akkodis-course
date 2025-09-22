@@ -33,7 +33,7 @@ TGT_NSG="${TGT_NSG:-nsg-migrate-target}"
 # Common
 TAGS="${TAGS:-workshop=session7 lab=lab2-asr}"              # space-separated key=value pairs
 SSH_SOURCE="${SSH_SOURCE:-0.0.0.0/0}"                       # "auto" to detect your /32
-HANDOFF_FILE="${HANDOFF_FILE:-lab2/.lab.env}"
+HANDOFF_FILE="${HANDOFF_FILE:-.lab.env}"
 
 trap 'echo "❌ Error on line $LINENO. Exiting."; exit 1' ERR
 
@@ -226,9 +226,20 @@ status() {
 
 cleanup() {
   echo "🧹 Cleanup starting..."
+  echo "Target (ASR) Resource Group: $TGT_RG_ASR"
+  echo "Target Vault Resource Group: $TGT_RG_VAULT"
+  echo "Source Resource Group: $SRC_RG"
+  echo "Deleting target ASR resource group ($TGT_RG_ASR)..."
   az group delete -n "$(dequote "$TGT_RG_ASR")" --yes --no-wait || true
+  echo "Deleting target vault resource group ($TGT_RG_VAULT)..."
   az group delete -n "$(dequote "$TGT_RG_VAULT")" --yes --no-wait || true
+  echo "Deleting source resource group ($SRC_RG)..."
   az group delete -n "$(dequote "$SRC_RG")" --yes --no-wait || true
+  if [ -f "${HANDOFF_FILE}" ]; then
+    echo "Removing handoff file: ${HANDOFF_FILE}"
+    rm -f "${HANDOFF_FILE}"
+  fi
+  echo "🧹 Cleanup commands issued. Resource deletions are running in background."
 }
 
 # --- Command dispatcher ---
