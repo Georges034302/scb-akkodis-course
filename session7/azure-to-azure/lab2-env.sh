@@ -260,10 +260,20 @@ cleanup() {
   echo "🧹 Cleanup commands issued. Resource deletions are running in background."
 }
 
+help() {
+  echo "Usage: $0 {login|init|status|cleanup|help}"
+  echo ""
+  echo "  login    - Authenticate to Azure and set subscription"
+  echo "  init     - Create all required resource groups, VNets, subnets, NSGs, and vault"
+  echo "  status   - Show a summary of all created resources"
+  echo "  cleanup  - Delete all resource groups and the handoff file"
+  echo "  help     - Show this help message"
+}
+
 # --- Command dispatcher ---
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   if [[ $# -lt 1 ]]; then
-    echo "Usage: $0 {login|init|status|cleanup}"
+    help
     exit 1
   fi
   "$@"
