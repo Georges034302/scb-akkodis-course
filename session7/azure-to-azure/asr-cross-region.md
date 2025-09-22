@@ -130,52 +130,60 @@ Monitor progress in **Site Recovery → Replicated items → source-vm-$SUFFIX**
 
 ## 4) Test Failover (No-Impact Validation)
 
-Create an isolated, temporary VM copy in **ASEA** to verify that failover works.
+The goal is to create an isolated, temporary VM copy in **Australia Southeast (ASEA)** to verify that failover works without impacting production.
 
-1. In the vault (**migrateVaultSEA-target**), open **Site Recovery → Replicated items → source-vm-$SUFFIX**.  
-2. Click **Test Failover**.  
-3. Configure:
-   - **Failover direction:** Australia East → Australia Southeast
-   - **Target resource group:** `rg-migrate-target`
-   - **Target network:** `vnet-migrate-target`
-   - **Target subnet:** `subnet-migrate-target`
-4. Confirm to start the test failover.
+### Steps:
 
-When complete: a **test VM** appears in `rg-migrate-target`. If the test VM lacks a public IP/NSG:
+1. In the vault **migrateVaultSEA-target**, go to:  
+   **Site Recovery → Replicated items → source-vm-$SUFFIX**  
+
+2. Click **Test Failover** and configure:  
+   - **Failover direction:** Australia East → Australia Southeast  
+   - **Target resource group:** rg-migrate-target  
+   - **Target network:** vnet-migrate-target  
+   - **Target subnet:** subnet-migrate-target  
+
+3. Confirm and start the test failover.  
+   - A **test VM** will appear in **rg-migrate-target** once complete.
+
+---
+
+#### If the test VM has no Public IP/NSG:
+
+Run the following commands to attach a public IP and allow SSH:
 
 ```bash
 # Find NIC name
 NIC_ID=$(az vm show --resource-group rg-migrate-target \
-  --name source-vm-$SUFFIX --query "networkProfile.networkInterfaces[0].id" -o tsv)
+  --name source-vm-$SUFFIX \
+  --query "networkProfile.networkInterfaces[0].id" -o tsv)
 NIC_NAME=$(basename "$NIC_ID")
-```
 
-```bash
-# Public IP
+# Create a Public IP
 az network public-ip create \
   --resource-group rg-migrate-target \
   --name source-vm-$SUFFIX-pip
-```
 
-```bash
-# Attach PIP (replace ipconfig name if different)
+# Get the NIC ipconfig name (usually 'ipconfig1')
+IPCONFIG_NAME=$(az network nic show \
+  --resource-group rg-migrate-target \
+  --name "$NIC_NAME" \
+  --query "ipConfigurations[0].name" -o tsv)
+
+# Attach Public IP to NIC
 az network nic ip-config update \
   --resource-group rg-migrate-target \
   --nic-name "$NIC_NAME" \
-  --name ipconfigsource-vm-$SUFFIX \
+  --name "$IPCONFIG_NAME" \
   --public-ip-address source-vm-$SUFFIX-pip
-```
 
-```bash
-# Optional: create/attach NSG to allow SSH if needed
+# (Optional) Create an NSG for SSH
 az network nsg create \
   --resource-group rg-migrate-target \
   --name asr-ssh-nsg \
   --location australiasoutheast
-```
 
-```bash
-# Add SSH - allow rule
+# Add SSH allow rule
 az network nsg rule create \
   --resource-group rg-migrate-target \
   --nsg-name asr-ssh-nsg \
@@ -184,9 +192,8 @@ az network nsg rule create \
   --access Allow --protocol Tcp --direction Inbound \
   --source-address-prefixes 0.0.0.0/0 \
   --destination-port-ranges 22
-```
 
-```bash
+# Associate NSG with the target subnet
 az network vnet subnet update \
   --resource-group rg-migrate-target \
   --vnet-name vnet-migrate-target \
@@ -194,7 +201,7 @@ az network vnet subnet update \
   --network-security-group asr-ssh-nsg
 ```
 
-Connect to the test VM to validate boot and login:
+### Connect to the test VM to validate boot and login:
 
 ```bash
 TEST_IP=$(az network.public-ip show \
