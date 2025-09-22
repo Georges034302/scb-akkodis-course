@@ -111,7 +111,7 @@ init() {
   if ! az network vnet subnet show -g "$_SRC_RG" --vnet-name "$_SRC_VNET" -n "$_SRC_SUBNET" >/dev/null 2>&1; then
     echo "Creating SRC Subnet '$_SRC_SUBNET'..."
     az network vnet subnet create -g "$_SRC_RG" --vnet-name "$_SRC_VNET" -n "$_SRC_SUBNET" \
-      --address-prefixes "$SRC_SUBNET_PREFIX" --tags "$TAGS" -o none
+      --address-prefixes "$SRC_SUBNET_PREFIX" -o none
   fi
 
   # Source NSG + rule + association (optional)
@@ -162,7 +162,7 @@ init() {
   if ! az network vnet subnet show -g "$_TGT_RG_ASR" --vnet-name "$_TGT_VNET" -n "$_TGT_SUBNET" >/dev/null 2>&1; then
     echo "Creating TGT Subnet '$_TGT_SUBNET'..."
     az network vnet subnet create -g "$_TGT_RG_ASR" --vnet-name "$_TGT_VNET" -n "$_TGT_SUBNET" \
-      --address-prefixes "$TGT_SUBNET_PREFIX" --tags "$TAGS" -o none
+      --address-prefixes "$TGT_SUBNET_PREFIX" -o none
   fi
 
   # Optional TGT NSG + rule + association
