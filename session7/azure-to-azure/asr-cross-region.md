@@ -130,9 +130,13 @@ Monitor progress in **Site Recovery → Replicated items → source-vm-$SUFFIX**
 
 ## 4) Test Failover (No-Impact Validation)
 
-⚠️ **Important:** You cannot start a Test Failover until **initial replication is complete**.  
-The VM status in the Recovery Services Vault must show **Protected**.  
-If replication is still in progress, wait until it finishes.
+> ⚠️ **Note:**  
+> • First, wait for **initial replication** to complete — during this stage ASR view shows replication in progress.  
+> • Next, wait for **synchronization** to finish — the VM status must change to **Protected**.  
+> • This process typically takes **20–30 minutes** (longer for larger disks/VMs).  
+> • Once done, you should see: **Status = Protected**, **Replication Health = Healthy**, and a valid **RPO timestamp** in the Recovery Services Vault.
+
+
 
 ### 🔍 How to check replication status
 You can check in **Azure Portal** → **Recovery Services Vault → Site Recovery → Replicated Items → source-vm-$SUFFIX**.  
