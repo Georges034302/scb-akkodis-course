@@ -158,34 +158,41 @@ az site-recovery job list \
 ### After ASR replication is completed - Test Failover:
 
 1. In the vault **rg-migrate-target-vault/migrateVaultSEA-target**, go to:  
-   **Site Recovery → Replicated items → source-vm-$SUFFIX**  
+   **Site Recovery → Replicated items → source-vm-$SUFFIX**
 
-2. Click **Test Failover** and configure:  
-   - **Failover direction:** Australia East → Australia Southeast  
+2. Click **Test Failover** and configure the following:
+
+   - **Test failover direction**
+     - **Source:** Australia East
+     - **Destination:** Australia Southeast
+
+   - **Test failover settings**
+     - **Recovery point:** (Choose the latest or your preferred recovery point)
+     - **Azure virtual network:** vnet-migrate-target
    - **Target resource group:** rg-migrate-target  
-   - **Target network:** vnet-migrate-target  
-   - **Target subnet:** subnet-migrate-target  
+   - **Target subnet:** subnet-migrate-target
 
-3. Confirm and start the test failover.  
+3. Confirm and start the test failover. 
+   - Wait for the Test Failover to Complete.
    - A **test VM** will appear in **rg-migrate-target** once complete.
 
 ---
 
-#### If the test VM has no Public IP/NSG:
+#### Access and Validate the Test VM (SSH & Connectivity):
 
 Run the following commands to attach a public IP and allow SSH:
 
 ```bash
 # Find NIC name
 NIC_ID=$(az vm show --resource-group rg-migrate-target \
-  --name source-vm-$SUFFIX \
+  --name source-vm-$SUFFIX-test \
   --query "networkProfile.networkInterfaces[0].id" -o tsv)
 NIC_NAME=$(basename "$NIC_ID")
 
 # Create a Public IP
 az network public-ip create \
   --resource-group rg-migrate-target \
-  --name source-vm-$SUFFIX-pip
+  --name source-vm-$SUFFIX-test-pip
 
 # Get the NIC ipconfig name (usually 'ipconfig1')
 IPCONFIG_NAME=$(az network nic show \
@@ -198,7 +205,7 @@ az network nic ip-config update \
   --resource-group rg-migrate-target \
   --nic-name "$NIC_NAME" \
   --name "$IPCONFIG_NAME" \
-  --public-ip-address source-vm-$SUFFIX-pip
+  --public-ip-address source-vm-$SUFFIX-test-pip
 
 # (Optional) Create an NSG for SSH
 az network nsg create \
@@ -224,12 +231,12 @@ az network vnet subnet update \
   --network-security-group asr-ssh-nsg
 ```
 
-### Connect to the test VM to validate boot and login:
+#### Connect to the test VM to validate boot and login:
 
 ```bash
-TEST_IP=$(az network.public-ip show \
+TEST_IP=$(az network public-ip show \
   --resource-group rg-migrate-target \
-  --name source-vm-$SUFFIX-pip \
+  --name source-vm-$SUFFIX-test-pip \
   --query "ipAddress" -o tsv)
 echo "Test VM IP: $TEST_IP"
 
@@ -249,12 +256,13 @@ This is the **real cutover**. It shuts down the source and promotes the replica 
 az vm deallocate -g rg-migrate-source -n source-vm-$SUFFIX
 ```
 
-2. In the vault (**migrateVaultSEA-target**) → **Site Recovery → Replicated items → source-vm-$SUFFIX**.  
-3. Click **Planned Failover** and confirm:
+2. In the vault (**migrateVaultSEA-target**) 
+3. Go to → **Site Recovery → Replicated items → source-vm-$SUFFIX**.  
+4. Click **Planned Failover** and confirm:
    - **Direction:** Australia East → Australia Southeast  
    - **Target RG:** `rg-migrate-target`  
    - **Target VNet/Subnet:** `vnet-migrate-target` / `subnet-migrate-target`  
-4. Start the failover and monitor until complete.
+5. Start the failover and monitor until complete.
 
 ASR will finalize sync, stop the source VM, and bring up the **replicated VM** in `rg-migrate-target` (ASEA).
 
