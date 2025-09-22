@@ -103,7 +103,7 @@ Use the Azure Portal for the ASR wizard (easiest for learners):
 - **Source resource group:** `rg-migrate-source`
 - **VM to replicate:** `source-vm-$SUFFIX`
 - Deployment model: Resource Manager 
-- Disaster recovery between availability zones → **Yes**
+- Disaster recovery between availability zones → **No**
 - Click → **Next**
 
 **(2) Virtual machines**
