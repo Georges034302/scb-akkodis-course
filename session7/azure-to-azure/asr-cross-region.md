@@ -66,10 +66,6 @@ Use a suffix to avoid collisions in classrooms:
 
 ```bash
 export SUFFIX=$RANDOM
-```
-
-```bash
-export SUFFIX=$RANDOM
 read -s -p "Enter a secure password for the VM admin user: " ADMIN_PASSWORD && echo
 
 az vm create \
