@@ -253,6 +253,7 @@ ssh azureuser@"$TEST_IP" hostname
 This is the **real cutover**. It shuts down the source and promotes the replica in ASEA.
 
 ```bash
+# Manual VM shutdown before planned failover (ensures data consistency)
 az vm deallocate -g rg-migrate-source -n source-vm-$SUFFIX
 ```
 
@@ -261,8 +262,9 @@ az vm deallocate -g rg-migrate-source -n source-vm-$SUFFIX
 4. Click **Failover** for `Planned Failover` and confirm:
    - **Direction:** Australia East → Australia Southeast  
    - **Target RG:** `rg-migrate-target`  
-   - **Target VNet/Subnet:** `vnet-migrate-target` / `subnet-migrate-target`  
-5. Start the failover and monitor until complete.
+   - Shutdown machine before beginning the failover **Yes**
+5. Start the failover and monitor until complete. 
+6. Check status changes from `Failover was initiated` to `Completing falover` to `Failover completed`
 
 ASR will finalize sync, stop the source VM, and bring up the **replicated VM** in `rg-migrate-target` (ASEA).
 
@@ -273,12 +275,41 @@ ASR will finalize sync, stop the source VM, and bring up the **replicated VM** i
 Get the public IP of the failover VM (attach one if not present as in Step 5).
 
 ```bash
-REPL_IP=$(az vm list -d \
+# Get the NIC resource ID of the migrated VM
+REPL_NIC_ID=$(az vm show \
   --resource-group rg-migrate-target \
-  --query "[0].publicIps" -o tsv)
+  --name source-vm-$SUFFIX \
+  --query "networkProfile.networkInterfaces[0].id" -o tsv)
+
+# Extract the NIC name from the resource ID
+REPL_NIC_NAME=$(basename "$REPL_NIC_ID")
+
+# Create a new Public IP for the migrated VM (if not already present)
+az network public-ip create \
+  --resource-group rg-migrate-target \
+  --name source-vm-$SUFFIX-pip
+
+# Get the name of the NIC's IP configuration (usually 'ipconfig1')
+IPCONFIG_NAME=$(az network nic show \
+  --resource-group rg-migrate-target \
+  --name "$REPL_NIC_NAME" \
+  --query "ipConfigurations[0].name" -o tsv)
+
+# Attach the new Public IP to the NIC
+az network nic ip-config update \
+  --resource-group rg-migrate-target \
+  --nic-name "$REPL_NIC_NAME" \
+  --name "$IPCONFIG_NAME" \
+  --public-ip-address source-vm-$SUFFIX-pip
+
+# Retrieve the public IP address of the migrated VM
+REPL_IP=$(az network public-ip show \
+  --resource-group rg-migrate-target \
+  --name source-vm-$SUFFIX-pip \
+  --query "ipAddress" -o tsv)
 echo "Migrated VM IP: $REPL_IP"
 
-# Quick command mode (prints hostname then disconnects)
+# SSH into the migrated VM and print its hostname
 ssh azureuser@"$REPL_IP" hostname
 
 # Or open an interactive shell:
@@ -295,31 +326,33 @@ lsb_release -a || cat /etc/os-release
 
 ---
 
-## 7) Cleanup
+## 7) Commit Failover & Decommission Source
 
-Two parts:
+✅ Post-Failover Next Steps in Azure ASR
 
-**A) Target resources (ASEA) — lab-scoped**
+1. **Commit the Failover**  
+   - In the vault **migrateVaultSEA-target**, go to:  
+     **Site Recovery → Replicated items → source-vm-$SUFFIX**  
+   - Click **Commit Failover**.  
+   - This finalizes the cutover, discards recovery points, and confirms the VM is running in **Australia Southeast**.
+   - Check status changes from `Commit in progress` to `Failover committed`
+
+2. **Decommission Source VM** (if migration is final)  
+   - Shut down and delete the **source VM** in `rg-migrate-source`.  
+   - This avoids double billing for compute/storage.
+
+3. **Verify Target VM**  
+   - Confirm the replica in `rg-migrate-target` is healthy.  
+   - Ensure NIC + Public IP are attached, and test SSH connectivity.  
+   - Update DNS or hostnames as needed.
+
+---
+
+## 8) Cleanup
 
 ```bash
-# Removes target ASR RG (replicated items etc.)
-az group delete -n rg-migrate-target --yes --no-wait
+./lab2-env.sh cleanup
 ```
-
-```bash
-# Removes the vault RG (Recovery Services Vault)
-az group delete -n rg-migrate-target-vault --yes --no-wait
-```
-
-**B) Source resources (AE) — optional**  
-If you want to also remove the source landing zone created for this lab:
-
-```bash
-DELETE_SOURCE_ON_CLEANUP=true ./lab2-env.sh cleanup
-# (or) az group delete -n rg-migrate-source --yes --no-wait
-```
-
-> **Tip:** If you plan to re-run the lab soon, you can keep the source RG to save time.
 
 ---
 
