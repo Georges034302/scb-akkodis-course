@@ -71,20 +71,29 @@ SCB Azure Training Series by Akkodis. Includes slide decks and lab guides for si
 <details>
 <summary><strong>Session 7 – Demo</strong> (click to expand/hide)</summary>
 
-### 🧰 Common Environment Setup & Cleanup
-- **Script:** [`session7/env.sh`](session7/env.sh)
+---
 
 ### 🧪 [Lift & Shift Migration Lab](session7/liftshift/lift-and-shift.md)
 - **Objective:** Simulate a lift-and-shift (rehost) migration by capturing a Linux VM, creating a snapshot and managed disk, and deploying a new VM from that disk to represent the migrated workload.
 - **Topics:** Snapshot-based migration, managed disks, disk cloning, VM deployment, SSH/password validation.
 
+---
+
 ### 🧪 [Azure to Azure Migration Lab (ASR)](session7/azure-to-azure/asr-cross-region.md)
 - **Objective:** Simulate an on-premises to Azure migration using Azure Site Recovery (ASR) with a cross-region Recovery Services Vault, including test and planned failover.
-- **Topics:** ASR cross-region DR, Recovery Services Vault, portal-based replication, test failover, planned failover (cutover), SSH validation, cleanup.
+- **Topics:** ASR cross-region disaster recovery, Recovery Services Vault, portal-based replication, test failover, planned failover (cutover), SSH validation, cleanup.
 
-### 🧪 [AWS to Azure Migration Lab (Simulated VHD Import)](session7/aws_azure/aws-to-azure.md)
-- **Objective:** Demonstrate a basic migration scenario from AWS to Azure by simulating VHD import and VM deployment.
-- **Topics:** VHD export/import, managed disk creation, VM deployment from VHD, validation, cleanup.
+---
+
+### 🧪 [AWS to Azure Migration Lab (EC2 Export → Azure Import)](session7/aws_azure/aws-to-azure.md)
+- **Objective:** Demonstrate a basic migration scenario from AWS to Azure by exporting an AWS EC2 instance as a VHD, uploading it to Azure Blob Storage, and deploying a VM from that disk.
+- **Topics:** EC2 export, S3, AzCopy, Azure Blob Storage, managed disk creation, VM deployment from VHD, validation, cleanup.
+
+---
+
+### 🧪 [AWS to Azure Migration Lab (Azure Migrate)](session7/aws_azure/aws-azure-migrate.md)
+- **Objective:** Use Azure Migrate to assess, replicate, and migrate AWS EC2 workloads into Azure with automated discovery, assessment, and orchestrated cutover.
+- **Topics:** Azure Migrate project, appliance deployment, AWS discovery, assessment, replication, cutover, validation.
 
 </details>
 
