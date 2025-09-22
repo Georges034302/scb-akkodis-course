@@ -1,87 +1,73 @@
-# Lab 3-A: AWS → Azure Migration (EC2 Export ➜ Azure Import via VHD)
+# Lab 3‑A: AWS → Azure Migration (EC2 Export ➜ Azure Import via VHD)
 
-This lab walks you through exporting an **AWS EC2** web server (Apache HTTP Server) to **VHD**, copying it to **Azure Blob Storage**, then creating a **Managed Disk** and **Azure VM** from that disk.
-
-<img width="1536" height="1024" alt="AWS-Azure--VHD-migration" src="https://github.com/user-attachments/assets/e0c666fd-15b8-4f9d-b6c6-e75297b1cdaa" />
-
-> Uses **password auth** (not SSH keys) and **`SUFFIX=$RANDOM`** to guarantee unique names.  
-> The Azure side uses **`lab3-env.sh`** to prepare the landing zone (**RG/VNet/Subnet/NSG**) and write a hand-off file `.lab.env` you can `source` (# Lab 3-A: AWS → Azure Migration (EC2 Export ➜ Azure Import via VHD)
-
-This lab walks you through exporting an **AWS EC2** web server (Apache HTTP Server) to **VHD**, copying it to **Azure Blob Storage**, then creating a **Managed Disk** and **Azure VM** from that disk — using **Lab 3 naming** where **source** artifacts end with **`-source`** (AWS) and **target** resources end with **`-target`** (Azure).
+This lab exports an **AWS EC2** Linux web server (Apache HTTP Server) to a **VHD**, copies it to **Azure Blob Storage**, converts it to a **Page Blob**, creates a **Managed Disk**, and finally an **Azure VM**.  
+We follow the naming convention: AWS **source** artifacts end with **`-source`**; Azure **target** resources end with **`-target`**.
 
 <img width="1536" height="1024" alt="AWS-Azure--VHD-migration" src="https://github.com/user-attachments/assets/e0c666fd-15b8-4f9d-b6c6-e75297b1cdaa" />
-
 > Uses **password auth** (not SSH keys) and **`SUFFIX=$RANDOM`** to guarantee unique names.  
-> The Azure side uses **`lab3-env.sh`** (TARGET-only) to prepare **TGT_RG/TGT_VNET/TGT_SUBNET/TGT_NSG** and writes `.lab.env` for sourcing.  
-> **NSG Web Rules:** `lab3-env.sh` adds **HTTP (80)** and **HTTPS (443)** (with `CREATE_WEB_RULES=true`, default).
+> The Azure side uses **`lab3-env.sh`** to prepare the target landing zone (**TGT_RG/TGT_VNET/TGT_SUBNET/TGT_NSG**) and to write `.lab.env` for sourcing.  
+> **NSG Web Rules:** `lab3-env.sh` (by default) adds inbound **SSH 22**, **HTTP 80**, and **HTTPS 443** via `CREATE_WEB_RULES=true`.
 
 ---
 
 ## 🎯 Objectives
-- Export an **AWS EC2** image (AMI) as a **VHD** into **S3** (**-source** naming).  
-- Copy that **VHD** into **Azure Blob Storage**.  
-- Create a **Managed Disk** and **VM** in **Azure** (**-target** naming).  
-- Validate via **SSH** and **HTTP/HTTPS** (Apache).
+- Export an **EC2** AMI to **VHD** in **S3** (**-source** naming).  
+- Copy that **VHD** to **Azure Blob Storage** (server‑side copy).  
+- Convert to **Page Blob**, create a **Managed Disk** and **VM** (**-target** naming).  
+- Validate via **SSH** and **HTTP/HTTPS**.
 
 ---
 
 ## ✅ Prerequisites
-- **AWS CLI** authenticated (permissions for **AMI/S3/export**).  
-- **Azure CLI** authenticated (subscription access).  
-- **AzCopy** available locally.  
-- Network egress to **SSH (22)** and **HTTP/HTTPS** from your client IP.  
-- AWS **`vmimport`** service role exists and is trusted by `vmie.amazonaws.com` (VM Import/Export).  
-- EC2 instance is a Linux web server (Apache) you own and can export.
+- **AWS CLI** authenticated (AMI/S3/export permissions).
+- **Azure CLI** authenticated (subscription access).
+- **You ran** `lab3-env.sh` to prepare target networking/NSG **and** wrote `.lab.env`.
+- Network egress to **22/80/443** from your client IP.
+- AWS **`vmimport`** role set up (script provided below).
 
 ---
 
-## 1) Login & Initialize the Azure TARGET Environment
+## 1) Prepare Azure TARGET landing zone
 
-Run these from the `session7` folder. The script prepares the **Azure TARGET landing zone** and writes `.lab.env`:
+From your repo root (e.g., `session7`):
 
 ```bash
 chmod +x lab3-env.sh
 
-# Login (no-op if already logged in) + register providers
+# Login (and register providers)
 ./lab3-env.sh login
 
-# Provision/ensure TARGET RG, VNet, Subnet, NSG (idempotent). Adds SSH/HTTP/HTTPS rules by default.
+# Create target RG/VNet/Subnet/NSG (idempotent). Adds SSH/HTTP/HTTPS by default.
 ./lab3-env.sh init
-# optionally lock SSH to your /32 and/or disable web rules:
-# SSH_SOURCE=auto CREATE_WEB_RULES=false ./lab3-env.sh init
 
-# Quick health check (non-zero exit if missing)
+# Quick health check
 ./lab3-env.sh status
 
-# Load variables exported by the env script
+# Load hand-off variables for later steps
 source .lab.env
 echo "TGT_RG=$TGT_RG TGT_LOCATION=$TGT_LOCATION TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG"
 ```
 
 ---
 
-## 2) Prepare Unique Names & Identify the AWS Instance (**source**)
+## 2) Prepare unique suffix & choose the EC2 instance (**source**)
 
 ```bash
-# Unique suffix to avoid collisions
+# Unique suffix to avoid global name collisions
 export SUFFIX=$RANDOM
 
-# Replace with your real EC2 instance ID (the Apache web server to migrate)
-EC2_ID="i-xxxxxxxxxxxx"
-
-# Dynamically get AWS RC2 instance-id (source VM)
-EC2_ID=$(aws ec2 describe-instances \
-  --query "Reservations[].Instances[].InstanceId" \
-  --output text)
-echo "EC2 instance ID = $EC2_ID"
+# Pick your EC2 instance (Apache web server) to migrate (replace if you already know it)
+EC2_ID=$(aws ec2 describe-instances --query "Reservations[].Instances[].InstanceId" --output text | awk '{print $1}')
+echo "EC2_ID=$EC2_ID"
 ```
+
+> Tip: If multiple instances are returned, set `EC2_ID="i-xxxxxxxxxxxx"` explicitly.
 
 ---
 
-## 3) Create an AMI From the Running EC2 (No Reboot) (**source**)
+## 3) Create an AMI from the EC2 (no reboot) (**source**)
 
 ```bash
-# Create an image (AMI) of the EC2 instance without reboot to avoid downtime
 aws ec2 create-image \
   --instance-id "$EC2_ID" \
   --name "WebServerExport-$SUFFIX-source" \
@@ -89,145 +75,204 @@ aws ec2 create-image \
 ```
 
 ```bash
-# Capture the AMI ID (or inspect create-image output directly)
+# Capture the AMI ID
 AMI_ID=$(aws ec2 describe-images --owners self \
   --filters "Name=name,Values=WebServerExport-$SUFFIX-source" \
   --query "Images[0].ImageId" \
   --output text)
-
-echo "Using AMI: $AMI_ID"
+echo "AMI_ID=$AMI_ID"
 ```
 
-> ⚠️ Some Marketplace AMIs are **not exportable**. Use an AMI you own and is eligible for export.
+> ⚠️ Some Marketplace AMIs are **not exportable**. Use an AMI you own and that is eligible for export.
 
 ---
 
-## 4) Create an S3 Bucket for Export (**source**)
+## 4) Create S3 export bucket (**source**)
 
 ```bash
-# Global-unique bucket for the exported VHD (include -source naming)
-aws s3 mb "s3://ec2-export-bucket-$SUFFIX-source"
+export BUCKET="ec2-export-bucket-$SUFFIX-source"
+aws s3 mb "s3://$BUCKET"
 ```
-
-> Ensure the **`vmimport`** role exists and is configured per AWS documentation.
 
 ---
 
-## 5) Export the AMI to VHD in S3 (**source**)
+## 5) Configure AWS VM Import/Export permissions (**source**)
 
-### Step A – Prepare S3 Bucket and Permissions for VM Import/Export
+Use the helper to create/update the **`vmimport`** role and apply the bucket policy (argument = `SUFFIX`).
 
 ```bash
-# Make the helper script executable (one-time)
-chmod +x setup_vmimport.sh 
-
-# Run the setup script to configure the S3 bucket and permissions for VM import/export
-./setup_vmimport.sh $SUFFIX  # provide SUFFIX random value as argument to the script
+chmod +x setup_vmimport.sh
+./setup_vmimport.sh "$SUFFIX"
 ```
 
-### Step B – Export the AMI as a VHD to S3
+---
+
+## 6) Export the AMI to VHD in S3 (**source**)
 
 ```bash
-# Start the export of the AMI to VHD format in the specified S3 bucket/prefix
 EXPORT_TASK_ID=$(aws ec2 export-image \
   --image-id "$AMI_ID" \
   --disk-image-format VHD \
-  --s3-export-location S3Bucket="${BUCKET}",S3Prefix="exports/" \
+  --s3-export-location S3Bucket="$BUCKET",S3Prefix="exports/" \
   --query "ExportImageTaskId" \
   --output text)
 echo "Export task: $EXPORT_TASK_ID"
 ```
 
 ```bash
-# Check status (repeat until Status=completed)
+# Watch until Status = completed
 aws ec2 describe-export-image-tasks \
   --export-image-task-ids "$EXPORT_TASK_ID" \
   --query "ExportImageTasks[].{ID:ExportImageTaskId,Status:Status,Progress:Progress,Message:StatusMessage}" \
   --output table
 ```
 
-### VHD Validation: When complete, the VHD will appear under:
+When complete, the VHD will appear under:
 ```
 s3://ec2-export-bucket-$SUFFIX-source/exports/
 ```
 
+Get the exported object key and generate a **presigned URL**:
+
+```bash
+SRC_KEY=$(aws s3api list-objects-v2 \
+  --bucket "$BUCKET" \
+  --prefix "exports/" \
+  --query "reverse(sort_by(Contents[?ends_with(Key, '.vhd')], &LastModified))[0].Key" \
+  --output text)
+echo "SRC_KEY=$SRC_KEY"
+
+# 1-hour presigned URL for that exact VHD object
+SRC_S3_URL=$(aws s3 presign "s3://$BUCKET/$SRC_KEY" --expires-in 3600)
+echo "SRC_S3_URL=$SRC_S3_URL"
+```
+
 ---
 
-## 6) Create Azure Storage (Unique) & Container (**target**)
+## 7) Create Azure Storage (target) & container (**target**)
 
 ```bash
 # Storage account name: 3–24 lowercase alphanumeric, globally unique
-# (No hyphens allowed, so we append 'tgt' to indicate target.)
-SA_NAME="migratevhdstore${SUFFIX}tgt"
+export SA_NAME="migratevhdstore${SUFFIX}tgt"
 
-# Create storage account in your configured TARGET location and RG
+# Create the storage account in your target RG/location
 az storage account create \
   --name "$SA_NAME" \
   --resource-group "$TGT_RG" \
   --location "$TGT_LOCATION" \
   --sku Standard_LRS
 
-# Create a container to hold VHDs
+# Create a container for VHDs
 az storage container create \
   --account-name "$SA_NAME" \
   --name vhds \
   --auth-mode login
 ```
 
+### Assign yourself **Storage Blob Data Contributor** (Portal)
+1. Azure Portal → Storage accounts → **`$SA_NAME`**  
+2. **Access control (IAM)** → **+ Add** → **Add role assignment**  
+3. **Role**: **Storage Blob Data Contributor**  
+4. **Assign access to**: *User, group, or service principal* → pick your signed‑in user  
+5. **Save** (RBAC may take a minute to propagate)
+
+---
+
+## 8) Server‑side copy: S3 ➜ Azure (target)
+
+### Pull VHD from the **presigned S3 URL** into a **block blob** in Azure first.
+
 ```bash
-# Generate SAS for ADD/CREATE/WRITE/LIST (valid ~4 hours)
-EXPIRY=$(date -u -d "+4 hours" '+%Y-%m-%dT%H:%MZ')
-SAS=$(az storage container generate-sas \
+export CONTAINER="vhds"
+export DST_BLOCK_BLOB="imported-${SUFFIX}.vhd"   # block blob first
+
+az storage blob copy start \
   --account-name "$SA_NAME" \
-  --name vhds \
-  --permissions acwl \
-  --expiry "$EXPIRY" \
+  --destination-container "$CONTAINER" \
+  --destination-blob "$DST_BLOCK_BLOB" \
+  --source-uri "$SRC_S3_URL" \
+  --auth-mode login
+```
+
+#### Monitor until completed:
+```bash
+az storage blob show \
+  --account-name "$SA_NAME" \
+  -c "$CONTAINER" -n "$DST_BLOCK_BLOB" \
   --auth-mode login \
-  -o tsv)
-echo "SAS generated (expires $EXPIRY)"
+  --query "properties.copy | {Status:status, Progress:progress, CompletionTime:completionTime}" \
+  -o table
+```
+
+> If you see `AuthorizationPermissionMismatch`, wait a minute for RBAC or re‑assign the role above.
+
+---
+
+## 9) Convert **Block Blob** ➜ **Page Blob** (**required for Managed Disk**)
+
+> Managed disks can only be created from **Page Blobs** and sizes must be **512‑byte aligned**.
+
+```bash
+# Choose final page blob name
+export DST_PAGE_BLOB="imported-${SUFFIX}-page.vhd"
+
+# 1) Get size of the block blob and round up to 512-byte boundary
+SIZE=$(az storage blob show \
+  --account-name "$SA_NAME" -c "$CONTAINER" -n "$DST_BLOCK_BLOB" \
+  --auth-mode login --query "properties.contentLength" --output text)
+PAGE_SIZE=$(( ((SIZE + 511) / 512) * 512 ))
+echo "Block=$SIZE  PageAligned=$PAGE_SIZE"
+
+# 2) Create an empty Page Blob of that size
+az storage blob create \
+  --account-name "$SA_NAME" -c "$CONTAINER" -n "$DST_PAGE_BLOB" \
+  --type page --size "$PAGE_SIZE" --auth-mode login
+
+# 3) Make a short SAS to read the source block blob
+EXPIRY=$(date -u -d "+2 hours" '+%Y-%m-%dT%H:%MZ')
+SRC_SAS=$(az storage blob generate-sas \
+  --account-name "$SA_NAME" -c "$CONTAINER" -n "$DST_BLOCK_BLOB" \
+  --permissions r --expiry "$EXPIRY" --https-only \
+  --auth-mode login --output tsv)
+SRC_URL="https://${SA_NAME}.blob.core.windows.net/${CONTAINER}/${DST_BLOCK_BLOB}?${SRC_SAS}"
+
+# 4) Copy into the Page Blob (server-side)
+az storage blob copy start \
+  --account-name "$SA_NAME" \
+  --destination-container "$CONTAINER" \
+  --destination-blob "$DST_PAGE_BLOB" \
+  --source-uri "$SRC_URL" \
+  --auth-mode login
+
+# 5) Watch until Status=success
+az storage blob show \
+  --account-name "$SA_NAME" -c "$CONTAINER" -n "$DST_PAGE_BLOB" \
+  --auth-mode login --query "properties.copy" -o table
 ```
 
 ---
 
-## 7) Copy the VHD From S3 → Azure Blob (AzCopy) (**source ➜ target**)
+## 10) Create a Managed Disk from the Page Blob (**target**)
 
 ```bash
-# Replace with your actual exported object name from S3
-SRC_S3_URL="https://s3.amazonaws.com/ec2-export-bucket-$SUFFIX-source/exports/myexport.vhd"
-
-# Destination blob URL with SAS
-DST_BLOB_URL="https://${SA_NAME}.blob.core.windows.net/vhds/imported-${SUFFIX}-target.vhd?${SAS}"
-
-# Cross-cloud copy (no local disk usage)
-azcopy copy "$SRC_S3_URL" "$DST_BLOB_URL" --recursive=false
-```
-
-> If direct S3 access is blocked, download locally then use `az storage blob upload` to the container.
-
----
-
-## 8) Create a Managed Disk From the Imported VHD (**target**)
-
-```bash
-# Build a managed OS disk in Azure from the uploaded VHD (Linux)
 az disk create \
   --resource-group "$TGT_RG" \
+  --location "$TGT_LOCATION" \
   --name "aws-imported-disk-${SUFFIX}-target" \
-  --source "https://${SA_NAME}.blob.core.windows.net/vhds/imported-${SUFFIX}-target.vhd" \
+  --source "https://${SA_NAME}.blob.core.windows.net/${CONTAINER}/${DST_PAGE_BLOB}" \
   --os-type Linux
 ```
 
 ---
 
-## 9) Create the Migrated VM in Azure (Password Auth) (**target**)
+## 11) Create the migrated VM (**target**, password auth)
 
 ```bash
-# Prompt securely for the admin password (lab uses password auth, not SSH keys)
 read -s -p "Enter a secure password for the migrated VM admin user: " ADMIN_PASSWORD && echo
 
-# Create the VM by attaching the imported OS disk; place it into the prepared TARGET VNet/Subnet/NSG
 az vm create \
   --resource-group "$TGT_RG" \
+  --location "$TGT_LOCATION" \
   --name "aws-migrated-vm-${SUFFIX}-target" \
   --attach-os-disk "aws-imported-disk-${SUFFIX}-target" \
   --os-type Linux \
@@ -240,320 +285,60 @@ az vm create \
   --nsg "$TGT_NSG"
 ```
 
-> If your NSG is associated at the **subnet**, attaching `--nsg` at VM create may be ignored. The rules added by `lab3-env.sh` handle inbound **80/443/22**.
+> If your NSG is associated at the **subnet**, the VM‑level `--nsg` is ignored. `lab3-env.sh` already attached NSG to the subnet with 22/80/443 allowed (by default).
 
 ---
 
-## 10) Validate the Migrated VM (SSH + Web) (**target**)
+## 12) Validate (SSH + Web)
 
 ```bash
-# Confirm environment health
+# Environment health
 ./lab3-env.sh status
 
-# Get the VM public IP
+# Public IP
 PUBLIC_IP=$(az vm show -d \
   --resource-group "$TGT_RG" \
   --name "aws-migrated-vm-${SUFFIX}-target" \
-  --query publicIps -o tsv)
-echo "Migrated VM Public IP: $PUBLIC_IP"
+  --query publicIps --output text)
+echo "Public IP: $PUBLIC_IP"
 
-# SSH: expect the host to respond and print its hostname
+# SSH
 ssh -o StrictHostKeyChecking=no azureuser@"$PUBLIC_IP" hostname
-```
 
-```bash
-# HTTP validation (Apache)
+# Web (Apache)
 curl -I "http://$PUBLIC_IP"
-# Optional HTTPS if configured on the VM:
+# Optional:
 curl -Ik "https://$PUBLIC_IP"
 ```
 
-> For a browser test, open: `http://$PUBLIC_IP` (and `https://$PUBLIC_IP` if enabled).
+Open your browser to `http://$PUBLIC_IP` (and `https://$PUBLIC_IP` if configured).
 
 ---
 
-## 11) Cleanup (Optional)
+## 13) Cleanup (optional)
 
 ```bash
-# Remove Azure TARGET landing zone resources created by the lab
+# Remove Azure target landing zone resources
 ./lab3-env.sh cleanup
 
-# Delete the storage account used for the imported VHD
+# Delete the storage account that held the VHD
 az storage account delete \
   --name "$SA_NAME" \
   --resource-group "$TGT_RG" \
-  --yes \
-  --no-wait
+  --yes --no-wait
 ```
 
-> In AWS (source), optionally delete the S3 export bucket and the AMI once you’re done.
+In AWS, optionally delete the S3 export bucket and the AMI.
 
 ---
 
-## 📘 Notes
-- **Export eligibility:** Some Marketplace AMIs are not exportable. Use your own AMI.  
-- **Security:** Prefer locking SSH to your `/32` (`SSH_SOURCE=auto ./lab3-env.sh init`). You can disable auto web rules via `CREATE_WEB_RULES=false` and add your own restricted source prefixes.  
-- **Production path:** For ongoing migrations, prefer **Azure Migrate: Server Migration** (agentless replication, test failover, orchestrated cutover).  
-- **Costs:** Storage accounts, managed disks, and VMs incur charges while present.
-
-✅ **End of Lab** — You exported an AWS EC2 VM (**-source**), imported its VHD into Azure, built a managed disk and VM (**-target**), opened NSG for **SSH + HTTP/HTTPS** (via env script), and validated access.exports `RG`, `LOCATION`, `VNET`, `SUBNET`, `NSG_NAME`, etc.).  
-> **NSG Web Rules:** `lab3-env.sh` now adds **HTTP (80)** and **HTTPS (443)** rules automatically when `CREATE_WEB_RULES=true` (default).
+## 🧰 Troubleshooting
+- **`InvalidApiVersionParameter` when creating storage account:** upgrade Azure CLI (`az upgrade`) or create via ARM with `--api-version 2024-03-01`.
+- **`AuthorizationPermissionMismatch` on blob ops:** ensure your signed‑in user has **Storage Blob Data Contributor** on the storage account.
+- **Managed disk creation fails:** confirm the source is a **Page Blob** and size is 512‑byte aligned.
+- **Presigned URL expired during copy:** generate a fresh presigned URL and restart the copy.
 
 ---
 
-## 🎯 Objectives
-- Export an **AWS EC2** image (AMI) as a **VHD** into **S3**.  
-- Copy that **VHD** into **Azure Blob Storage** (using SAS + AzCopy).  
-- Create a **Managed Disk** and **VM** in **Azure** from the imported VHD.  
-- Validate via **SSH** and **HTTP/HTTPS** (Apache).
-
----
-
-## ✅ Prerequisites
-- **AWS CLI** authenticated (permissions for **AMI/S3/export**).  
-- **Azure CLI** authenticated (subscription access).  
-- **AzCopy** available locally.  
-- Network egress to **SSH (22)** and **HTTP/HTTPS** from your client IP.  
-- AWS **`vmimport`** service role exists and is trusted by `vmie.amazonaws.com` (VM Import/Export).  
-- EC2 instance is a Linux web server (Apache) you own and can export.
-
----
-
-## 1) Login & Initialize the Azure Environment
-
-Run these from the `session7` folder. The script prepares the **Azure landing zone** and writes `.lab.env`:
-
-```bash
-chmod +x lab3-env.sh
-
-# Login (no-op if already logged in) + register providers
-./lab3-env.sh login
-
-# Provision/ensure RG, VNet, Subnet, NSG (idempotent). Adds SSH(22)+HTTP(80)+HTTPS(443) rules by default.
-./lab3-env.sh init
-# optionally lock SSH to your /32 and/or disable web rules:
-# SSH_SOURCE=auto CREATE_WEB_RULES=false ./lab3-env.sh init
-
-# Quick health check (non-zero exit if missing)
-./lab3-env.sh status
-
-# Load variables exported by the env script
-source .lab.env
-echo "RG=$RG LOCATION=$LOCATION VNET=$VNET SUBNET=$SUBNET NSG_NAME=$NSG_NAME"
-```
-
----
-
-## 2) Prepare Unique Names & Identify the AWS Instance
-
-```bash
-# Unique suffix to avoid collisions
-SUFFIX=$RANDOM
-
-# Replace with your real EC2 instance ID (the Apache web server to migrate)
-EC2_ID="i-xxxxxxxxxxxx"
-```
-
----
-
-## 3) Create an AMI From the Running EC2 (No Reboot)
-
-```bash
-# Create an image (AMI) of the EC2 instance without reboot to avoid downtime
-aws ec2 create-image \
-  --instance-id "$EC2_ID" \
-  --name "WebServerExport-$SUFFIX" \
-  --no-reboot
-```
-
-```bash
-# OPTIONAL: capture the AMI ID (or inspect create-image output directly)
-AMI_ID=$(aws ec2 describe-images --owners self \
-  --filters "Name=name,Values=WebServerExport-$SUFFIX" \
-  --query "Images[0].ImageId" -o tsv)
-echo "Using AMI: $AMI_ID"
-```
-
-> ⚠️ Some Marketplace AMIs are **not exportable**. Use an AMI you own and is eligible for export.
-
----
-
-## 4) Create an S3 Bucket for Export
-
-```bash
-# Global-unique bucket for the exported VHD
-aws s3 mb "s3://ec2-export-bucket-$SUFFIX"
-```
-
-> Ensure the **`vmimport`** role exists and is configured per AWS documentation.
-
----
-
-## 5) Export the AMI to VHD in S3
-
-```bash
-# Export the AMI to VHD placed under the S3 prefix
-EXPORT_TASK_ID=$(aws ec2 export-image \
-  --image-id "$AMI_ID" \
-  --disk-image-format VHD \
-  --s3-export-location S3Bucket="ec2-export-bucket-$SUFFIX",S3Prefix="exports/" \
-  --query "ExportImageTaskId" -o tsv)
-echo "Export task: $EXPORT_TASK_ID"
-```
-
-```bash
-# Poll export status until Status becomes 'completed'
-aws ec2 describe-export-image-tasks \
-  --export-image-task-ids "$EXPORT_TASK_ID"
-```
-
-When complete, the VHD will appear under:
-```
-s3://ec2-export-bucket-$SUFFIX/exports/
-```
-
----
-
-## 6) Create Azure Storage (Unique) & Container
-
-```bash
-# Storage account name: 3–24 lowercase alphanumeric, globally unique
-SA_NAME="migratevhdstore${SUFFIX}"
-
-# Create storage account in your configured LOCATION and RG
-az storage account create \
-  --name "$SA_NAME" \
-  --resource-group "$RG" \
-  --location "$LOCATION" \
-  --sku Standard_LRS
-
-# Create a container to hold VHDs
-az storage container create \
-  --account-name "$SA_NAME" \
-  --name vhds \
-  --auth-mode login
-```
-
-```bash
-# Generate SAS for ADD/CREATE/WRITE/LIST (valid ~4 hours)
-EXPIRY=$(date -u -d "+4 hours" '+%Y-%m-%dT%H:%MZ')
-SAS=$(az storage container generate-sas \
-  --account-name "$SA_NAME" \
-  --name vhds \
-  --permissions acwl \
-  --expiry "$EXPIRY" \
-  --auth-mode login \
-  -o tsv)
-echo "SAS generated (expires $EXPIRY)"
-```
-
----
-
-## 7) Copy the VHD From S3 → Azure Blob (AzCopy)
-
-```bash
-# Replace with your actual exported object name from S3
-SRC_S3_URL="https://s3.amazonaws.com/ec2-export-bucket-$SUFFIX/exports/myexport.vhd"
-
-# Destination blob URL with SAS
-DST_BLOB_URL="https://${SA_NAME}.blob.core.windows.net/vhds/imported-${SUFFIX}.vhd?${SAS}"
-
-# Cross-cloud copy (no local disk usage)
-azcopy copy "$SRC_S3_URL" "$DST_BLOB_URL" --recursive=false
-```
-
-> If direct S3 access is blocked, download locally then use `az storage blob upload` to the container.
-
----
-
-## 8) Create a Managed Disk From the Imported VHD
-
-```bash
-# Build a managed OS disk in Azure from the uploaded VHD (Linux)
-az disk create \
-  --resource-group "$RG" \
-  --name "aws-imported-disk-${SUFFIX}" \
-  --source "https://${SA_NAME}.blob.core.windows.net/vhds/imported-${SUFFIX}.vhd" \
-  --os-type Linux
-```
-
----
-
-## 9) Create the Migrated VM in Azure (Password Auth)
-
-```bash
-# Prompt securely for the admin password (lab uses password auth, not SSH keys)
-read -s -p "Enter a secure password for the migrated VM admin user: " ADMIN_PASSWORD && echo
-
-# Create the VM by attaching the imported OS disk; place it into the prepared VNet/Subnet/NSG
-az vm create \
-  --resource-group "$RG" \
-  --name "aws-migrated-vm-${SUFFIX}" \
-  --attach-os-disk "aws-imported-disk-${SUFFIX}" \
-  --os-type Linux \
-  --size Standard_B1s \
-  --admin-username azureuser \
-  --admin-password "$ADMIN_PASSWORD" \
-  --authentication-type password \
-  --vnet-name "$VNET" \
-  --subnet "$SUBNET" \
-  --nsg "$NSG_NAME"
-```
-
-> If your NSG is associated at the **subnet**, attaching `--nsg` at VM create may be ignored. The rules added by `lab3-env.sh` handle inbound **80/443/22**.
-
----
-
-## 10) Validate the Migrated VM (SSH + Web)
-
-```bash
-# Confirm environment health
-./lab3-env.sh status
-
-# Get the VM public IP
-PUBLIC_IP=$(az vm show -d \
-  --resource-group "$RG" \
-  --name "aws-migrated-vm-${SUFFIX}" \
-  --query publicIps -o tsv)
-echo "Migrated VM Public IP: $PUBLIC_IP"
-
-# SSH: expect the host to respond and print its hostname
-ssh -o StrictHostKeyChecking=no azureuser@"$PUBLIC_IP" hostname
-```
-
-```bash
-# HTTP validation (Apache)
-curl -I "http://$PUBLIC_IP"
-# Optional HTTPS if configured on the VM:
-curl -Ik "https://$PUBLIC_IP"
-```
-
-> For a browser test, open: `http://$PUBLIC_IP` (and `https://$PUBLIC_IP` if enabled).
-
----
-
-## 11) Cleanup (Optional)
-
-```bash
-# Remove Azure landing zone resources created by the lab
-./lab3-env.sh cleanup
-
-# Delete the storage account used for the imported VHD
-az storage account delete \
-  --name "$SA_NAME" \
-  --resource-group "$RG" \
-  --yes \
-  --no-wait
-```
-
-> In AWS, you can optionally delete the S3 export bucket and the AMI once you’re done.
-
----
-
-## 📘 Notes
-- **Export eligibility:** Some Marketplace AMIs are not exportable. Use your own AMI.  
-- **Security:** Prefer locking SSH to your `/32` (`SSH_SOURCE=auto ./lab3-env.sh init`). You can disable auto web rules via `CREATE_WEB_RULES=false` and add your own restricted source prefixes.  
-- **Production path:** For ongoing migrations, prefer **Azure Migrate: Server Migration** (agentless replication, test failover, orchestrated cutover).  
-- **Costs:** Storage accounts, managed disks, and VMs incur charges while present.
-
-✅ **End of Lab** — You exported an AWS EC2 VM, imported its VHD into Azure, built a managed disk and VM, **opened NSG for SSH + HTTP/HTTPS (via env script)**, and validated access.
+## ✅ Summary
+You exported an AWS EC2 VM (**-source**), imported its VHD to Azure, converted it to a **Page Blob**, created a **Managed Disk**, provisioned an Azure VM (**-target**), and validated access over **SSH + HTTP/HTTPS**.

@@ -233,9 +233,13 @@ status() {
   echo "=============================="
   echo ""
 
-  echo "== Target Landing Zone (${TGT_LOCATION}) ==""
+  echo "== Target Landing Zone (${TGT_LOCATION}) =="
   TGT_RG_INFO=$(az group show -n "${TGT_RG}" --query '{Name:name, Location:location, ProvisioningState:properties.provisioningState}' -o tsv 2>/dev/null || true)
-  [[ -n "$TGT_RG_INFO" ]] && echo "  • Resource Group: $TGT_RG_INFO" || echo "  • Resource Group: ${TGT_RG} (not found)"
+  if [ -n "$TGT_RG_INFO" ]; then
+    echo "  • Resource Group: $TGT_RG_INFO"
+  else
+    echo "  • Resource Group: ${TGT_RG} (not found)"
+  fi
 
   VNET_NAME=$(az network vnet show -g "${TGT_RG}" -n "${TGT_VNET}" --query 'name' -o tsv 2>/dev/null || true)
   if [[ -n "$VNET_NAME" ]]; then
