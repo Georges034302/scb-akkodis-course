@@ -258,7 +258,7 @@ az vm deallocate -g rg-migrate-source -n source-vm-$SUFFIX
 
 2. In the vault (**migrateVaultSEA-target**) 
 3. Go to → **Site Recovery → Replicated items → source-vm-$SUFFIX**.  
-4. Click **Planned Failover** and confirm:
+4. Click **Failover** for `Planned Failover` and confirm:
    - **Direction:** Australia East → Australia Southeast  
    - **Target RG:** `rg-migrate-target`  
    - **Target VNet/Subnet:** `vnet-migrate-target` / `subnet-migrate-target`  
