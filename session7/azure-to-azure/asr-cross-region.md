@@ -153,7 +153,7 @@ az site-recovery job list \
 
 ### After ASR replication is completed - Test Failover:
 
-1. In the vault **migrateVaultSEA-target**, go to:  
+1. In the vault **rg-migrate-target-vault/migrateVaultSEA-target**, go to:  
    **Site Recovery → Replicated items → source-vm-$SUFFIX**  
 
 2. Click **Test Failover** and configure:  
