@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Session 7 - Lab 2 Environment (ASR: On‑Prem -> Azure Cross‑Region)
+# Session 7 - Lab 2 Environment (ASR: Source -> Target Cross-Region)
 # Prepares SOURCE (Australia East) + TARGET (Australia Southeast) infra for ASR demo
 # Safe, idempotent, and CI-friendly
 set -euo pipefail
@@ -8,103 +8,54 @@ IFS=$'\n\t'
 # -------- Config (overridable via env vars) --------
 SUBSCRIPTION_ID="${SUBSCRIPTION_ID:-}"
 
-# Source (simulated on‑prem) in Australia East
+# Source (simulated on-prem) in Australia East
 SRC_LOCATION="${SRC_LOCATION:-australiaeast}"
-SRC_RG="${SRC_RG:-rg-migrate-demo}"
-SRC_VNET="${SRC_VNET:-vnet-migrate}"
-SRC_SUBNET="${SRC_SUBNET:-subnet-migrate}"
+SRC_RG="${SRC_RG:-rg-migrate-source}"
+SRC_VNET="${SRC_VNET:-vnet-migrate-source}"
+SRC_SUBNET="${SRC_SUBNET:-subnet-migrate-source}"
 SRC_ADDR_SPACE="${SRC_ADDR_SPACE:-10.10.0.0/16}"
 SRC_SUBNET_PREFIX="${SRC_SUBNET_PREFIX:-10.10.1.0/24}"
 SRC_CREATE_NSG="${SRC_CREATE_NSG:-true}"
-SRC_NSG="${SRC_NSG:-nsg-migrate}"
+SRC_NSG="${SRC_NSG:-nsg-migrate-source}"
 
 # Target (Azure DR region) in Australia Southeast
 TGT_LOCATION="${TGT_LOCATION:-australiasoutheast}"
-TGT_RG_VAULT="${TGT_RG_VAULT:-rg-migrate-target}"         # Vault lives here
-TGT_VAULT_NAME="${TGT_VAULT_NAME:-migrateVaultSEA}"       # Recovery Services Vault
-TGT_RG_ASR="${TGT_RG_ASR:-rg-migrate-demo-asr}"           # Replicated items land here
-TGT_VNET="${TGT_VNET:-vnet-migrate-asr}"
-TGT_SUBNET="${TGT_SUBNET:-subnet-migrate}"
+TGT_RG_VAULT="${TGT_RG_VAULT:-rg-migrate-target-vault}"   # Vault lives here
+TGT_VAULT_NAME="${TGT_VAULT_NAME:-migrateVaultSEA-target}" # Recovery Services Vault
+TGT_RG_ASR="${TGT_RG_ASR:-rg-migrate-target}"              # Replicated items land here
+TGT_VNET="${TGT_VNET:-vnet-migrate-target}"
+TGT_SUBNET="${TGT_SUBNET:-subnet-migrate-target}"
 TGT_ADDR_SPACE="${TGT_ADDR_SPACE:-10.20.0.0/16}"
 TGT_SUBNET_PREFIX="${TGT_SUBNET_PREFIX:-10.20.1.0/24}"
 TGT_CREATE_NSG="${TGT_CREATE_NSG:-false}"                  # Usually created by wizard; optional here
-TGT_NSG="${TGT_NSG:-asr-ssh-nsg}"
+TGT_NSG="${TGT_NSG:-nsg-migrate-target}"
 
 # Common
-TAGS="${TAGS:-workshop=session7 lab=lab2-asr}"             # space-separated key=value pairs
-SSH_SOURCE="${SSH_SOURCE:-0.0.0.0/0}"                      # "auto" to detect your /32
+TAGS="${TAGS:-workshop=session7 lab=lab2-asr}"              # space-separated key=value pairs
+SSH_SOURCE="${SSH_SOURCE:-0.0.0.0/0}"                       # "auto" to detect your /32
 HANDOFF_FILE="${HANDOFF_FILE:-lab2/.lab.env}"
-DELETE_SOURCE_ON_CLEANUP="${DELETE_SOURCE_ON_CLEANUP:-false}"  # if true, cleanup deletes SRC_RG too
-
-# Ensure the handoff file is git-ignored
-if [ -d "$(dirname "$HANDOFF_FILE")" ]; then
-  GITIGNORE_FILE="$(dirname "$HANDOFF_FILE")/.gitignore"
-  HANDOFF_BASENAME="$(basename "$HANDOFF_FILE")"
-  if ! grep -qxF "$HANDOFF_BASENAME" "$GITIGNORE_FILE" 2>/dev/null; then
-    echo "$HANDOFF_BASENAME" >> "$GITIGNORE_FILE"
-  fi
-fi
 
 trap 'echo "❌ Error on line $LINENO. Exiting."; exit 1' ERR
 
 # -------- Helpers --------
+dequote() {
+  local v="$1"
+  v="${v%\"}"; v="${v#\"}"
+  v="${v%\'}"; v="${v#\'}"
+  printf "%s" "$v"
+}
+
 need_az() { command -v az >/dev/null 2>&1 || { echo "Azure CLI (az) not found. Install it first."; exit 1; }; }
 ensure_login() { az account show >/dev/null 2>&1 || { echo "Please run: $0 login"; exit 1; }; }
 
-az_defaults_src() {
-  az configure --defaults location="${SRC_LOCATION}" group="${SRC_RG}" >/dev/null
-  az config set extension.use_dynamic_install=yes_without_prompt >/dev/null
-  az version | head -n 1
-}
-az_defaults_tgt() {
-  az configure --defaults location="${TGT_LOCATION}" >/dev/null
-}
-
-resolve_ssh_source() {
-  if [[ "${SSH_SOURCE}" == "auto" ]]; then
-    if command -v curl >/dev/null 2>&1; then
-      local ip; ip="$(curl -s https://ifconfig.me || true)"
-      if [[ -n "${ip}" ]]; then SSH_SOURCE="${ip}/32"; fi
+ensure_providers() {
+  for ns in Microsoft.Network Microsoft.Compute Microsoft.RecoveryServices Microsoft.OperationalInsights; do
+    state=$(az provider show -n "$ns" --query "registrationState" -o tsv 2>/dev/null || echo "NotRegistered")
+    if [[ "$state" != "Registered" ]]; then
+      echo "Registering resource provider: $ns"
+      az provider register -n "$ns" -o none || true
     fi
-  fi
-}
-
-# Existence checks
-exists_rg()          { az group exists -n "$1" | grep -q true; }
-exists_vnet()        { az network vnet show -n "$2" -g "$1" >/dev/null 2>&1; }
-exists_subnet()      { az network vnet subnet show -n "$3" -g "$1" --vnet-name "$2" >/dev/null 2>&1; }
-exists_nsg()         { az network nsg show -n "$2" -g "$1" >/dev/null 2>&1; }
-exists_vault()       { az backup vault show -n "$2" -g "$1" >/dev/null 2>&1; }
-rule_present()       { az network nsg rule show -g "$1" --nsg-name "$2" -n allow-ssh >/dev/null 2>&1; }
-
-write_handoff() {
-  mkdir -p "$(dirname "${HANDOFF_FILE}")"
-  cat > "${HANDOFF_FILE}" <<EOF
-# Generated by lab2-env.sh
-# Source (AE)
-export SRC_LOCATION=${SRC_LOCATION}
-export SRC_RG=${SRC_RG}
-export SRC_VNET=${SRC_VNET}
-export SRC_SUBNET=${SRC_SUBNET}
-export SRC_NSG=${SRC_NSG}
-export SRC_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-export SRC_VNET_ID=$(az network vnet show -g "${SRC_RG}" -n "${SRC_VNET}" --query id -o tsv)
-export SRC_SUBNET_ID=$(az network vnet subnet show -g "${SRC_RG}" --vnet-name "${SRC_VNET}" -n "${SRC_SUBNET}" --query id -o tsv)
-$( [[ "${SRC_CREATE_NSG}" == "true" ]] && echo "export SRC_NSG_ID=$(az network nsg show -g \"${SRC_RG}\" -n \"${SRC_NSG}\" --query id -o tsv)" )
-
-# Target (ASEA)
-export TGT_LOCATION=${TGT_LOCATION}
-export TGT_RG_VAULT=${TGT_RG_VAULT}
-export TGT_VAULT_NAME=${TGT_VAULT_NAME}
-export TGT_RG_ASR=${TGT_RG_ASR}
-export TGT_VNET=${TGT_VNET}
-export TGT_SUBNET=${TGT_SUBNET}
-export TGT_VNET_ID=$(az network vnet show -g "${TGT_RG_ASR}" -n "${TGT_VNET}" --query id -o tsv || echo "")
-export TGT_SUBNET_ID=$(az network vnet subnet show -g "${TGT_RG_ASR}" --vnet-name "${TGT_VNET}" -n "${TGT_SUBNET}" --query id -o tsv || echo "")
-export TGT_VAULT_ID=$(az backup vault show -g "${TGT_RG_VAULT}" -n "${TGT_VAULT_NAME}" --query id -o tsv)
-EOF
-  echo "📄 Wrote hand-off file: ${HANDOFF_FILE}"
-  echo "   Use: source ${HANDOFF_FILE}"
+  done
 }
 
 # -------- Commands --------
@@ -122,236 +73,169 @@ login() {
   fi
   echo "Active subscription:"
   az account show --query '{name:name, id:id}' -o table
-  az_defaults_src
+  ensure_providers
 }
 
 init() {
-  need_az; ensure_login; resolve_ssh_source
+  need_az; ensure_login
+
+  # Clean variables (strip accidental quotes)
+  _SRC_RG="$(dequote "${SRC_RG}")"
+  _SRC_VNET="$(dequote "${SRC_VNET}")"
+  _SRC_SUBNET="$(dequote "${SRC_SUBNET}")"
+  _SRC_NSG="$(dequote "${SRC_NSG}")"
+  _TGT_RG_VAULT="$(dequote "${TGT_RG_VAULT}")"
+  _TGT_VAULT_NAME="$(dequote "${TGT_VAULT_NAME}")"
+  _TGT_RG_ASR="$(dequote "${TGT_RG_ASR}")"
+  _TGT_VNET="$(dequote "${TGT_VNET}")"
+  _TGT_SUBNET="$(dequote "${TGT_SUBNET}")"
+  _TGT_NSG="$(dequote "${TGT_NSG}")"
 
   echo "== Source (Australia East) configuration =="
-  echo "  RG=${SRC_RG}  VNET=${SRC_VNET}  SUBNET=${SRC_SUBNET}  NSG=${SRC_NSG}"
-  az_defaults_src
+  echo "  RG=$_SRC_RG  VNET=$_SRC_VNET  SUBNET=$_SRC_SUBNET  NSG=$_SRC_NSG"
 
-  # Source RG
-  if exists_rg "${SRC_RG}"; then
-    echo "SRC RG '${SRC_RG}' exists ✔"
-  else
-    echo "Creating SRC RG '${SRC_RG}'..."
-    az group create -n "${SRC_RG}" -l "${SRC_LOCATION}" --tags ${TAGS} -o none
+  if ! az group exists -n "$_SRC_RG" | grep -q true; then
+    echo "Creating SRC RG '$_SRC_RG'..."
+    az group create -n "$_SRC_RG" -l "$SRC_LOCATION" --tags "$TAGS" -o none
   fi
 
-  # Source VNet/Subnet
-  if exists_vnet "${SRC_RG}" "${SRC_VNET}"; then
-    echo "SRC VNet '${SRC_VNET}' exists ✔"
-  else
-    echo "Creating SRC VNet '${SRC_VNET}' + Subnet '${SRC_SUBNET}'..."
-    az network vnet create -g "${SRC_RG}" -n "${SRC_VNET}" \
-      --address-prefixes "${SRC_ADDR_SPACE}" \
-      --subnet-name "${SRC_SUBNET}" \
-      --subnet-prefixes "${SRC_SUBNET_PREFIX}" \
-      --tags ${TAGS} -o none
-  fi
-  if exists_subnet "${SRC_RG}" "${SRC_VNET}" "${SRC_SUBNET}"; then
-    echo "SRC Subnet '${SRC_SUBNET}' exists ✔"
-  else
-    echo "Creating SRC Subnet '${SRC_SUBNET}'..."
-    az network vnet subnet create -g "${SRC_RG}" --vnet-name "${SRC_VNET}" -n "${SRC_SUBNET}" \
-      --address-prefixes "${SRC_SUBNET_PREFIX}" --tags ${TAGS} -o none
+  if ! az network vnet show -g "$_SRC_RG" -n "$_SRC_VNET" >/dev/null 2>&1; then
+    echo "Creating SRC VNet '$_SRC_VNET' + Subnet '$_SRC_SUBNET'..."
+    az network vnet create -g "$_SRC_RG" -n "$_SRC_VNET" \
+      --address-prefixes "$SRC_ADDR_SPACE" \
+      --subnet-name "$_SRC_SUBNET" \
+      --subnet-prefixes "$SRC_SUBNET_PREFIX" \
+      --tags "$TAGS" -o none
   fi
 
-  # Source NSG (optional)
-  if [[ "${SRC_CREATE_NSG}" == "true" ]]; then
-    if exists_nsg "${SRC_RG}" "${SRC_NSG}"; then
-      echo "SRC NSG '${SRC_NSG}' exists ✔"
-    else
-      echo "Creating SRC NSG '${SRC_NSG}'..."
-      az network nsg create -g "${SRC_RG}" -n "${SRC_NSG}" --tags ${TAGS} -o none
+  if [[ "$SRC_CREATE_NSG" == "true" ]]; then
+    if ! az network nsg show -g "$_SRC_RG" -n "$_SRC_NSG" >/dev/null 2>&1; then
+      echo "Creating SRC NSG '$_SRC_NSG'..."
+      az network nsg create -g "$_SRC_RG" -n "$_SRC_NSG" --tags "$TAGS" -o none
     fi
-    if rule_present "${SRC_RG}" "${SRC_NSG}"; then
-      echo "SRC NSG rule 'allow-ssh' exists ✔ (ensuring config)"
-      az network nsg rule update -g "${SRC_RG}" --nsg-name "${SRC_NSG}" -n allow-ssh \
-        --priority 1000 --access Allow --protocol Tcp --direction Inbound \
-        --source-address-prefixes "${SSH_SOURCE}" --destination-port-ranges 22 -o none
-    else
-      echo "Creating SRC NSG rule 'allow-ssh'..."
-      az network nsg rule create -g "${SRC_RG}" --nsg-name "${SRC_NSG}" -n allow-ssh \
-        --priority 1000 --access Allow --protocol Tcp --direction Inbound \
-        --source-address-prefixes "${SSH_SOURCE}" --destination-port-ranges 22 -o none
-    fi
-    echo "Associating SRC NSG to Subnet..."
-    az network vnet subnet update -g "${SRC_RG}" --vnet-name "${SRC_VNET}" -n "${SRC_SUBNET}" \
-      --network-security-group "${SRC_NSG}" -o none
+    echo "Associating NSG with Subnet..."
+    az network vnet subnet update -g "$_SRC_RG" --vnet-name "$_SRC_VNET" -n "$_SRC_SUBNET" \
+      --network-security-group "$_SRC_NSG" -o none
   fi
 
   echo "== Target (Australia Southeast) configuration =="
-  echo "  Vault RG=${TGT_RG_VAULT}  Vault=${TGT_VAULT_NAME}"
-  echo "  ASR RG=${TGT_RG_ASR}  VNET=${TGT_VNET}  SUBNET=${TGT_SUBNET}"
-  az_defaults_tgt
+  echo "  Vault RG=$_TGT_RG_VAULT  Vault=$_TGT_VAULT_NAME"
+  echo "  ASR RG=$_TGT_RG_ASR  VNET=$_TGT_VNET  SUBNET=$_TGT_SUBNET"
 
-  # Target RGs
-  if exists_rg "${TGT_RG_VAULT}"; then
-    echo "TGT Vault RG '${TGT_RG_VAULT}' exists ✔"
-  else
-    echo "Creating TGT Vault RG '${TGT_RG_VAULT}'..."
-    az group create -n "${TGT_RG_VAULT}" -l "${TGT_LOCATION}" --tags ${TAGS} -o none
+  if ! az group exists -n "$_TGT_RG_VAULT" | grep -q true; then
+    az group create -n "$_TGT_RG_VAULT" -l "$TGT_LOCATION" --tags "$TAGS" -o none
   fi
-  if exists_rg "${TGT_RG_ASR}"; then
-    echo "TGT ASR RG '${TGT_RG_ASR}' exists ✔"
-  else
-    echo "Creating TGT ASR RG '${TGT_RG_ASR}'..."
-    az group create -n "${TGT_RG_ASR}" -l "${TGT_LOCATION}" --tags ${TAGS} -o none
+  if ! az group exists -n "$_TGT_RG_ASR" | grep -q true; then
+    az group create -n "$_TGT_RG_ASR" -l "$TGT_LOCATION" --tags "$TAGS" -o none
   fi
 
-  # Recovery Services Vault
-  if exists_vault "${TGT_RG_VAULT}" "${TGT_VAULT_NAME}"; then
-    echo "Vault '${TGT_VAULT_NAME}' exists ✔"
-  else
-    echo "Creating Recovery Services Vault '${TGT_VAULT_NAME}'..."
-    az backup vault create -g "${TGT_RG_VAULT}" -n "${TGT_VAULT_NAME}" -l "${TGT_LOCATION}" -o none
+  if ! az backup vault show -g "$_TGT_RG_VAULT" -n "$_TGT_VAULT_NAME" >/dev/null 2>&1; then
+    az backup vault create -g "$_TGT_RG_VAULT" -n "$_TGT_VAULT_NAME" -l "$TGT_LOCATION" -o none
   fi
 
-  # Target VNet/Subnet (for failover)
-  if exists_vnet "${TGT_RG_ASR}" "${TGT_VNET}"; then
-    echo "TGT VNet '${TGT_VNET}' exists ✔"
-  else
-    echo "Creating TGT VNet '${TGT_VNET}' + Subnet '${TGT_SUBNET}'..."
-    az network vnet create -g "${TGT_RG_ASR}" -n "${TGT_VNET}" \
-      --address-prefixes "${TGT_ADDR_SPACE}" \
-      --subnet-name "${TGT_SUBNET}" \
-      --subnet-prefixes "${TGT_SUBNET_PREFIX}" \
-      --tags ${TAGS} -o none
+  if ! az network vnet show -g "$_TGT_RG_ASR" -n "$_TGT_VNET" >/dev/null 2>&1; then
+    az network vnet create -g "$_TGT_RG_ASR" -n "$_TGT_VNET" \
+      --address-prefixes "$TGT_ADDR_SPACE" \
+      --subnet-name "$_TGT_SUBNET" \
+      --subnet-prefixes "$TGT_SUBNET_PREFIX" \
+      --tags "$TAGS" -o none
   fi
-  if exists_subnet "${TGT_RG_ASR}" "${TGT_VNET}" "${TGT_SUBNET}"; then
-    echo "TGT Subnet '${TGT_SUBNET}' exists ✔"
-  else
-    echo "Creating TGT Subnet '${TGT_SUBNET}'..."
-    az network vnet subnet create -g "${TGT_RG_ASR}" --vnet-name "${TGT_VNET}" -n "${TGT_SUBNET}" \
-      --address-prefixes "${TGT_SUBNET_PREFIX}" --tags ${TAGS} -o none
-  fi
-
-  # Optional TGT NSG
-  if [[ "${TGT_CREATE_NSG}" == "true" ]]; then
-    if exists_nsg "${TGT_RG_ASR}" "${TGT_NSG}"; then
-      echo "TGT NSG '${TGT_NSG}' exists ✔"
-    else
-      echo "Creating TGT NSG '${TGT_NSG}'..."
-      az network nsg create -g "${TGT_RG_ASR}" -n "${TGT_NSG}" --tags ${TAGS} -o none
-    fi
-    if ! rule_present "${TGT_RG_ASR}" "${TGT_NSG}"; then
-      echo "Creating TGT NSG rule 'allow-ssh'..."
-      az network nsg rule create -g "${TGT_RG_ASR}" --nsg-name "${TGT_NSG}" -n allow-ssh \
-        --priority 1000 --access Allow --protocol Tcp --direction Inbound \
-        --source-address-prefixes "${SSH_SOURCE}" --destination-port-ranges 22 -o none
-    fi
-    echo "Associating TGT NSG to Subnet..."
-    az network vnet subnet update -g "${TGT_RG_ASR}" --vnet-name "${TGT_VNET}" -n "${TGT_SUBNET}" \
-      --network-security-group "${TGT_NSG}" -o none
-  fi
-
-  # Write outputs
-  write_handoff
 
   echo "✅ Lab 2 environment ready."
-  echo "   Source: ${SRC_RG}/${SRC_VNET}/${SRC_SUBNET} in ${SRC_LOCATION}"
-  echo "   Target: Vault=${TGT_VAULT_NAME} in ${TGT_RG_VAULT} (${TGT_LOCATION}), Failover VNet=${TGT_VNET} in ${TGT_RG_ASR}"
 }
 
 status() {
-  need_az; ensure_login
-  echo "🔍 Status overview"
-  az account show --query '{name:name, id:id}' -o table
+  echo ""
+  echo "=============================="
+  echo "🔍 Lab 2 ASR Environment Status"
+  echo "=============================="
+  echo ""
 
-  missing=0
-
-  printf "SRC RG '%s': " "${SRC_RG}";     exists_rg "${SRC_RG}" && echo "✅" || { echo "❌"; missing=1; }
-  printf "SRC VNet '%s': " "${SRC_VNET}"; exists_vnet "${SRC_RG}" "${SRC_VNET}" && echo "✅" || { echo "❌"; missing=1; }
-  printf "SRC Subnet '%s': " "${SRC_SUBNET}"; exists_subnet "${SRC_RG}" "${SRC_VNET}" "${SRC_SUBNET}" && echo "✅" || { echo "❌"; missing=1; }
-  if [[ "${SRC_CREATE_NSG}" == "true" ]]; then
-    printf "SRC NSG '%s': " "${SRC_NSG}"; exists_nsg "${SRC_RG}" "${SRC_NSG}" && echo "✅" || { echo "❌"; missing=1; }
+  echo "== Source Environment =="
+  # Resource Group
+  SRC_RG_INFO=$(az group show -n "${SRC_RG}" --query '{Name:name, Location:location, ProvisioningState:properties.provisioningState}' -o tsv 2>/dev/null)
+  if [[ -n "$SRC_RG_INFO" ]]; then
+    echo "  • Resource Group: $SRC_RG_INFO"
+  else
+    echo "  • Resource Group: ${SRC_RG} (not found)"
   fi
-
-  printf "TGT RG (Vault) '%s': " "${TGT_RG_VAULT}"; exists_rg "${TGT_RG_VAULT}" && echo "✅" || { echo "❌"; missing=1; }
-  printf "TGT Vault '%s': " "${TGT_VAULT_NAME}"; exists_vault "${TGT_RG_VAULT}" "${TGT_VAULT_NAME}" && echo "✅" || { echo "❌"; missing=1; }
-  printf "TGT RG (ASR) '%s': " "${TGT_RG_ASR}"; exists_rg "${TGT_RG_ASR}" && echo "✅" || { echo "❌"; missing=1; }
-  printf "TGT VNet '%s': " "${TGT_VNET}"; exists_vnet "${TGT_RG_ASR}" "${TGT_VNET}" && echo "✅" || { echo "❌"; missing=1; }
-  printf "TGT Subnet '%s': " "${TGT_SUBNET}"; exists_subnet "${TGT_RG_ASR}" "${TGT_VNET}" "${TGT_SUBNET}" && echo "✅" || { echo "❌"; missing=1; }
-  if [[ "${TGT_CREATE_NSG}" == "true" ]]; then
-    printf "TGT NSG '%s': " "${TGT_NSG}"; exists_nsg "${TGT_RG_ASR}" "${TGT_NSG}" && echo "✅" || { echo "❌"; missing=1; }
+  # VNet
+  VNET_SRC=$(az network vnet show -g "${SRC_RG}" -n "${SRC_VNET}" --query 'name' -o tsv 2>/dev/null)
+  if [[ -n "$VNET_SRC" ]]; then
+    echo "  • VNet: $VNET_SRC"
+    # Subnet
+    SUBNET_SRC=$(az network vnet subnet show -g "${SRC_RG}" --vnet-name "${SRC_VNET}" -n "${SRC_SUBNET}" --query '[name, addressPrefix]' -o tsv 2>/dev/null)
+    if [[ -n "$SUBNET_SRC" ]]; then
+      echo "    • Subnet: $(echo $SUBNET_SRC | awk '{print $1 " (" $2 ")"}')"
+    else
+      echo "    • Subnet: ${SRC_SUBNET} (not found)"
+    fi
+  else
+    echo "  • VNet: ${SRC_VNET} (not found)"
   fi
+  # NSG
+  NSG_SRC=$(az network nsg show -g "${SRC_RG}" -n "${SRC_NSG}" --query '[name, provisioningState]' -o tsv 2>/dev/null)
+  if [[ -n "$NSG_SRC" ]]; then
+    echo "  • NSG: $(echo $NSG_SRC | awk '{print $1 " (" $2 ")"}')"
+  else
+    echo "  • NSG: ${SRC_NSG} (not found)"
+  fi
+  echo ""
 
-  exit "${missing}"
+  echo "== ASR Vault Environment =="
+  # Vault RG
+  TGT_RG_VAULT_INFO=$(az group show -n "${TGT_RG_VAULT}" --query '{Name:name, Location:location, ProvisioningState:properties.provisioningState}' -o tsv 2>/dev/null)
+  if [[ -n "$TGT_RG_VAULT_INFO" ]]; then
+    echo "  • Resource Group: $TGT_RG_VAULT_INFO"
+  else
+    echo "  • Resource Group: ${TGT_RG_VAULT} (not found)"
+  fi
+  # Vault
+  VAULT_INFO=$(az backup vault show -g "${TGT_RG_VAULT}" -n "${TGT_VAULT_NAME}" --query '[name, location, provisioningState]' -o tsv 2>/dev/null)
+  if [[ -n "$VAULT_INFO" ]]; then
+    echo "  • Recovery Services Vault: $(echo $VAULT_INFO | awk '{print $1 " (" $2 ", " $3 ")"}')"
+  else
+    echo "  • Recovery Services Vault: ${TGT_VAULT_NAME} (not found)"
+  fi
+  echo ""
+
+  echo "== Target (ASR) Environment =="
+  # Target RG
+  TGT_RG_ASR_INFO=$(az group show -n "${TGT_RG_ASR}" --query '{Name:name, Location:location, ProvisioningState:properties.provisioningState}' -o tsv 2>/dev/null)
+  if [[ -n "$TGT_RG_ASR_INFO" ]]; then
+    echo "  • Resource Group: $TGT_RG_ASR_INFO"
+  else
+    echo "  • Resource Group: ${TGT_RG_ASR} (not found)"
+  fi
+  # VNet
+  VNET_TGT=$(az network vnet show -g "${TGT_RG_ASR}" -n "${TGT_VNET}" --query 'name' -o tsv 2>/dev/null)
+  if [[ -n "$VNET_TGT" ]]; then
+    echo "  • VNet: $VNET_TGT"
+    # Subnet
+    SUBNET_TGT=$(az network vnet subnet show -g "${TGT_RG_ASR}" --vnet-name "${TGT_VNET}" -n "${TGT_SUBNET}" --query '[name, addressPrefix]' -o tsv 2>/dev/null)
+    if [[ -n "$SUBNET_TGT" ]]; then
+      echo "    • Subnet: $(echo $SUBNET_TGT | awk '{print $1 " (" $2 ")"}')"
+    else
+      echo "    • Subnet: ${TGT_SUBNET} (not found)"
+    fi
+  else
+    echo "  • VNet: ${TGT_VNET} (not found)"
+  fi
+  echo ""
 }
 
 cleanup() {
-  need_az; ensure_login
   echo "🧹 Cleanup starting..."
-
-  # Target first (safe to delete anytime)
-  if exists_rg "${TGT_RG_ASR}"; then
-    echo "Deleting TGT ASR RG '${TGT_RG_ASR}' (no-wait)..."
-    az group delete -n "${TGT_RG_ASR}" --yes --no-wait || true
-  fi
-  if exists_rg "${TGT_RG_VAULT}"; then
-    echo "Deleting TGT Vault RG '${TGT_RG_VAULT}' (no-wait)..."
-    az group delete -n "${TGT_RG_VAULT}" --yes --no-wait || true
-  fi
-
-  # Source (optional)
-  if [[ "${DELETE_SOURCE_ON_CLEANUP}" == "true" ]]; then
-    if exists_rg "${SRC_RG}"; then
-      echo "Deleting SRC RG '${SRC_RG}' (no-wait)..."
-      az group delete -n "${SRC_RG}" --yes --no-wait || true
-    fi
-  else
-    echo "Keeping source RG '${SRC_RG}' (set DELETE_SOURCE_ON_CLEANUP=true to remove)."
-  fi
-
-  echo "🧹 Cleanup initiated."
+  az group delete -n "$(dequote "$TGT_RG_ASR")" --yes --no-wait || true
+  az group delete -n "$(dequote "$TGT_RG_VAULT")" --yes --no-wait || true
+  az group delete -n "$(dequote "$SRC_RG")" --yes --no-wait || true
 }
 
-usage() {
-  cat <<EOF
-Usage: $(basename "$0") {login|init|status|cleanup}
-
-Prepares Lab 2 (ASR cross-region) environment:
-- Source (Australia East): RG/VNet/Subnet (+ optional NSG for SSH)
-- Target (Australia Southeast): Recovery Services Vault + ASR RG + VNet/Subnet
-
-Env vars (optional):
-  SUBSCRIPTION_ID           Switch subscription after login
-
-  SRC_LOCATION              Default: australiaeast
-  SRC_RG                    Default: rg-migrate-demo
-  SRC_VNET                  Default: vnet-migrate
-  SRC_SUBNET                Default: subnet-migrate
-  SRC_ADDR_SPACE            Default: 10.10.0.0/16
-  SRC_SUBNET_PREFIX         Default: 10.10.1.0/24
-  SRC_CREATE_NSG            true|false (default: true)
-  SRC_NSG                   Default: nsg-migrate
-
-  TGT_LOCATION              Default: australiasoutheast
-  TGT_RG_VAULT              Default: rg-migrate-target
-  TGT_VAULT_NAME            Default: migrateVaultSEA
-  TGT_RG_ASR                Default: rg-migrate-demo-asr
-  TGT_VNET                  Default: vnet-migrate-asr
-  TGT_SUBNET                Default: subnet-migrate
-  TGT_ADDR_SPACE            Default: 10.20.0.0/16
-  TGT_SUBNET_PREFIX         Default: 10.20.1.0/24
-  TGT_CREATE_NSG            true|false (default: false)
-  TGT_NSG                   Default: asr-ssh-nsg
-
-  TAGS                      Space-separated key=value tags (default: "workshop=session7 lab=lab2-asr")
-  SSH_SOURCE                CIDR for SSH (default: 0.0.0.0/0, or "auto" for your /32)
-
-  HANDOFF_FILE              Output file with resolved IDs (default: lab2/.lab.env)
-  DELETE_SOURCE_ON_CLEANUP  true|false (default: false)
-EOF
-}
-
-case "${1:-}" in
-  login)   login ;;
-  init)    init ;;
-  status)  status ;;
-  cleanup) cleanup ;;
-  *)       usage ;;
-esac
+# --- Command dispatcher ---
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  if [[ $# -lt 1 ]]; then
+    echo "Usage: $0 {login|init|status|cleanup}"
+    exit 1
+  fi
+  "$@"
+fi
