@@ -130,9 +130,28 @@ Monitor progress in **Site Recovery → Replicated items → source-vm-$SUFFIX**
 
 ## 4) Test Failover (No-Impact Validation)
 
-The goal is to create an isolated, temporary VM copy in **Australia Southeast (ASEA)** to verify that failover works without impacting production.
+⚠️ **Important:** You cannot start a Test Failover until **initial replication is complete**.  
+The VM status in the Recovery Services Vault must show **Protected**.  
+If replication is still in progress, wait until it finishes.
 
-### Steps:
+### 🔍 How to check replication status
+You can check in **Azure Portal** → **Recovery Services Vault → Site Recovery → Replicated Items → source-vm-$SUFFIX**.  
+
+Or use the CLI (make sure the ASR extension is installed):
+
+```bash
+# Install ASR extension once
+az extension add --name site-recovery -y
+
+# List recent ASR jobs
+az site-recovery job list \
+  --resource-group rg-migrate-target-vault \
+  --vault-name migrateVaultSEA-target \
+  --query "[].{Name:name, State:properties.state, Start:properties.startTime, End:properties.endTime}" \
+  -o table
+``` 
+
+### After ASR replication is completed - Test Failover:
 
 1. In the vault **migrateVaultSEA-target**, go to:  
    **Site Recovery → Replicated items → source-vm-$SUFFIX**  
