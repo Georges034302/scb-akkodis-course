@@ -64,10 +64,16 @@ echo "TGT_RG=$TGT_RG TGT_LOCATION=$TGT_LOCATION TGT_VNET=$TGT_VNET TGT_SUBNET=$T
 
 ```bash
 # Unique suffix to avoid collisions
-SUFFIX=$RANDOM
+export SUFFIX=$RANDOM
 
 # Replace with your real EC2 instance ID (the Apache web server to migrate)
 EC2_ID="i-xxxxxxxxxxxx"
+
+# Dynamically get AWS RC2 instance-id (source VM)
+EC2_ID=$(aws ec2 describe-instances \
+  --query "Reservations[].Instances[].InstanceId" \
+  --output text)
+echo "EC2 instance ID = $EC2_ID"
 ```
 
 ---
@@ -83,10 +89,12 @@ aws ec2 create-image \
 ```
 
 ```bash
-# OPTIONAL: capture the AMI ID (or inspect create-image output directly)
+# Capture the AMI ID (or inspect create-image output directly)
 AMI_ID=$(aws ec2 describe-images --owners self \
   --filters "Name=name,Values=WebServerExport-$SUFFIX-source" \
-  --query "Images[0].ImageId" -o tsv)
+  --query "Images[0].ImageId" \
+  --output text)
+
 echo "Using AMI: $AMI_ID"
 ```
 
@@ -107,23 +115,38 @@ aws s3 mb "s3://ec2-export-bucket-$SUFFIX-source"
 
 ## 5) Export the AMI to VHD in S3 (**source**)
 
+### Step A – Prepare S3 Bucket and Permissions for VM Import/Export
+
 ```bash
-# Export the AMI to VHD placed under the S3 prefix
+# Make the helper script executable (one-time)
+chmod +x setup_vmimport.sh 
+
+# Run the setup script to configure the S3 bucket and permissions for VM import/export
+./setup_vmimport.sh $SUFFIX  # provide SUFFIX random value as argument to the script
+```
+
+### Step B – Export the AMI as a VHD to S3
+
+```bash
+# Start the export of the AMI to VHD format in the specified S3 bucket/prefix
 EXPORT_TASK_ID=$(aws ec2 export-image \
   --image-id "$AMI_ID" \
   --disk-image-format VHD \
-  --s3-export-location S3Bucket="ec2-export-bucket-$SUFFIX-source",S3Prefix="exports/" \
-  --query "ExportImageTaskId" -o tsv)
+  --s3-export-location S3Bucket="${BUCKET}",S3Prefix="exports/" \
+  --query "ExportImageTaskId" \
+  --output text)
 echo "Export task: $EXPORT_TASK_ID"
 ```
 
 ```bash
-# Poll export status until Status becomes 'completed'
+# Check status (repeat until Status=completed)
 aws ec2 describe-export-image-tasks \
-  --export-image-task-ids "$EXPORT_TASK_ID"
+  --export-image-task-ids "$EXPORT_TASK_ID" \
+  --query "ExportImageTasks[].{ID:ExportImageTaskId,Status:Status,Progress:Progress,Message:StatusMessage}" \
+  --output table
 ```
 
-When complete, the VHD will appear under:
+### VHD Validation: When complete, the VHD will appear under:
 ```
 s3://ec2-export-bucket-$SUFFIX-source/exports/
 ```
