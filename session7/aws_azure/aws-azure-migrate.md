@@ -22,8 +22,8 @@ You will configure Azure Migrate to connect to **AWS (-source)**, discover workl
 - **AWS CLI** authenticated with permissions for EC2/AMI/S3.  
 - **Azure CLI** authenticated with subscription access.  
 - **lab3-env.sh** prepared (TARGET RG/VNet/Subnet/NSG).  
-- Appliance deployment permissions in AWS (OVA import).  
-- Firewall egress open for appliance → Azure communication.  
+- Appliance deployment permissions in AWS (OVA/AMI import).  
+- Firewall egress open for appliance → Azure communication (HTTPS 443).  
 
 ---
 
@@ -56,17 +56,18 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
 
 ---
 
-## 3) Deploy the Azure Migrate Appliance (**source**)  
+## 3) Deploy the Azure Migrate Appliance (**source: AWS**)
 
-1. In the project, under **Servers, databases, and web apps → Discover**, choose **Discover machines**.  
+1. In your Azure Migrate project, go to **Servers, databases and web apps → Discover** → **Discover machines**.  
 2. Select **Yes, with AWS** as the source.  
-3. Download the **Azure Migrate appliance OVA for AWS**.  
-4. Import the OVA into AWS EC2 (recommended: `t2.medium` or higher).  
-5. During setup, register the appliance with the Azure Migrate project (copy/paste the project key).  
+3. Download the **Azure Migrate appliance for AWS** using the wizard.  
+4. Follow the wizard’s AWS steps to **create the EC2-based appliance** (the wizard guides you through AMI/OVA import or launch steps as applicable).  
+5. During setup, **register the appliance** by pasting the **project key** shown in the Azure Migrate wizard.  
+6. *(Optional, for dependency maps)* Provide guest credentials or install the dependency agent when prompted; otherwise discovery works but maps will be empty.
 
 ---
 
-## 4) Discover AWS VMs (**source**)  
+## 4) Discover AWS VMs (**source**)
 
 1. In the Azure Migrate portal, go back to the **Discover** wizard.  
 2. Confirm appliance connectivity.  
@@ -78,72 +79,102 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
 
 ---
 
-## 5) Run an Assessment (**target**)  
+## 5) Run an Assessment (**target**)
 
-1. In the Azure Migrate project, go to **Assessments** → **+ Create assessment**.  
-2. Choose the discovered AWS VMs.  
+1. In the Azure Migrate project, open **Assessments** → **+ Create assessment**.  
+2. Select the discovered AWS VMs.  
 3. Configure:  
-   - Target region: `$TGT_LOCATION`  
-   - Sizing criteria: **Performance-based**  
-   - Pricing: **Pay-as-you-go**  
-4. Review cost estimates, Azure SKU recommendations, and readiness (green/yellow/red).  
+   - **Target region**: `$TGT_LOCATION`  
+   - **Sizing criteria**:  
+     - **Performance-based** (uses collected CPU/RAM/IO counters to right-size), or  
+     - **As-on-prem** (mirrors current vCPU/RAM)  
+   - **Pricing**: **Pay-as-you-go** (or **Azure Hybrid Benefit** if eligible)  
+4. Review **readiness** (green/yellow/red), **recommended SKU**, and **estimated monthly cost**.
 
 ---
 
-## 6) Configure Replication (**source → target**)  
+## 6) Configure Replication (**source → target**)
 
-1. In the portal, under **Replicate**, select the AWS VMs to migrate.  
-2. Configure replication settings:  
+1. In **Azure Migrate → Replicate**, select the AWS VMs.  
+2. Configure replication:
    - **Target Subscription & RG**: `$TGT_RG`  
    - **Target VNet/Subnet**: `$TGT_VNET` / `$TGT_SUBNET`  
-   - **NSG**: `$TGT_NSG` (already provisioned)  
-   - **OS disk**: default  
-   - **Replication policy**: default (24h retention)  
-3. Replication begins; monitor under **Replicated items**.  
+   - **NSG**: `$TGT_NSG`  
+3. Review **Advanced** (recommended):
+   - **Disk selection & type** (OS + data disks; Premium/Standard)  
+   - **Availability** (none / Zone / Availability Set)  
+   - **Target VM size** (override if required)  
+   - **Public IP** (enable if you plan to SSH/HTTP directly for validation)  
+   - **Licensing** (Azure Hybrid Benefit if eligible)
+
+> After you start replication, monitor progress in **Replicated items**.
 
 ---
 
-## 7) Perform Cutover (**target**)  
+## 7) Perform Cutover (**target**)
 
-1. In **Azure Migrate → Replicated items**, select the AWS VM.  
-2. Choose **Migrate → Shut down and cut over**.  
-3. Azure Migrate will:  
-   - Shut down the EC2 instance (optional).  
-   - Perform a final sync.  
-   - Create a **new Azure VM** in `$TGT_RG`.  
+1. Verify **Compute quotas** in `$TGT_LOCATION` (insufficient vCPUs will block cutover).  
+2. In **Azure Migrate → Replicated items**, select the VM → **Migrate**.  
+3. Choose **Shut down and cut over** (optional shutdown of the AWS source).  
+4. Azure Migrate performs a final sync and creates an **Azure VM** in `$TGT_RG`.
 
----
-
-## 8) Validate the Migrated VM (**target**)  
+After cutover, identify the actual VM name and IP:
 
 ```bash
-# Get public IP of migrated VM
-PUBLIC_IP=$(az vm show -d \
-  --resource-group "$TGT_RG" \
-  --name "aws-migrated-vm-target" \
-  --query publicIps -o tsv)
-echo "Migrated VM Public IP: $PUBLIC_IP"
+# Show the most recently created VM in the target RG (adjust if needed)
+VM_NAME=$(az vm list -g "$TGT_RG" --query "[-1].name" -o tsv)
+echo "Created VM: $VM_NAME"
 
-# SSH validation
-ssh azureuser@"$PUBLIC_IP" hostname
+PUBLIC_IP=$(az vm show -d -g "$TGT_RG" -n "$VM_NAME" --query publicIps -o tsv)
+echo "Public IP: ${PUBLIC_IP:-<none>}"
+```
 
-# Web validation (Apache)
+> If there is **no Public IP**, validate via **Azure Bastion** or attach a temporary public IP to the NIC.
+
+---
+
+## 8) Validate the Migrated VM (**target**)
+
+```bash
+# If a Public IP exists:
+VM_NAME=$(az vm list -g "$TGT_RG" --query "[-1].name" -o tsv)
+PUBLIC_IP=$(az vm show -d -g "$TGT_RG" -n "$VM_NAME" --query publicIps -o tsv)
+
+echo "VM_NAME=$VM_NAME"
+echo "PUBLIC_IP=${PUBLIC_IP:-<none>}"
+
+# SSH (Linux) — replace <username> with your expected user for the image
+ssh <username>@"$PUBLIC_IP" hostname
+
+# Optional web check if you know the workload exposes HTTP:
 curl -I "http://$PUBLIC_IP"
 ```
 
-> For browser validation, open: `http://$PUBLIC_IP`.
+> **No Public IP?** Use **Azure Bastion** from the VM’s **Connect** menu, or attach a temporary public IP.
 
 ---
 
-## 9) Cleanup (Optional)  
+## 9) Cleanup (Optional)
 
-- In Azure:  
+- **Azure**  
   ```bash
   ./lab3-env.sh cleanup
   ```  
-- In AWS:  
-  - Terminate the **Azure Migrate appliance** VM.  
-  - Delete exported resources (optional).  
+
+- **AWS**  
+  - Terminate the **Azure Migrate appliance** EC2 instance.  
+  - Remove **temporary IAM users/roles/keys** created for the appliance.  
+  - Delete any **S3 import buckets**, **snapshots/AMIs**, or other temporary artifacts used during the appliance import process.
+
+---
+
+## 🔧 Quick Troubleshooting Tips
+
+- **Appliance not showing as connected:** Confirm outbound **HTTPS (443)** from the appliance to Azure; configure proxy if required.  
+- **No machines discovered:** Re-check AWS credentials in the appliance and region selection.  
+- **Dependency maps empty:** Install the dependency agent or provide guest credentials during discovery.  
+- **Cutover fails:** Check **Compute quotas** in `$TGT_LOCATION` and **target VM SKU** availability.  
+- **Can’t SSH/HTTP:** Ensure replication config included a **Public IP**, or use **Azure Bastion**. Verify NSG rules on `$TGT_NSG`.
 
 ---
 
