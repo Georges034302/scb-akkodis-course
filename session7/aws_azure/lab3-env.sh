@@ -261,15 +261,7 @@ status() {
     echo "  • NSG: ${TGT_NSG} (not found)"
   fi
   echo ""
-
-  echo "== Azure Migrate Project (optional) =="
-  MIG_PROJ=$(az resource show -g "${TGT_RG}" -n "${MIGRATE_PROJECT_NAME}" --resource-type "Microsoft.Migrate/migrateProjects" --query '[name,location,properties.provisioningState]' -o tsv 2>/dev/null || true)
-  if [[ -n "$MIG_PROJ" ]]; then
-    echo "  • Migrate Project: $(echo $MIG_PROJ | awk '{print $1 " (" $2 ", " $3 ")"}')"
-  else
-    echo "  • Migrate Project: ${MIGRATE_PROJECT_NAME} (not found / Portal-created projects may not appear immediately)"
-  fi
-  echo ""
+ 
 }
 
 cleanup() {
