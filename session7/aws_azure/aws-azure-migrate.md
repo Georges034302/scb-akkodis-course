@@ -96,7 +96,7 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
 
 ---
 
-### Add: Attach IAM Role for Session Manager Access (Recommended)
+### Add: Attach IAM Role for Session Manager Access (If RDP service does not load on VM start up)
 
 1. **Create IAM Role**
    - Go to **IAM → Roles → Create role**.  
