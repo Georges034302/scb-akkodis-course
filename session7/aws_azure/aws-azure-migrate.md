@@ -315,19 +315,21 @@ This assessment prepares you for the next stage: **Step 8 — Configure Replicat
 
 ## 8) Configure Replication (source → target)
 
-### A. In the Azure Portal
+The first step for migration is to **replicate a server or web app**.  
+Once replication completes, you can perform a **test migration** before finally migrating to your desired target service.
 
-1. **Open Azure Migrate Project**
-   - Go to the Azure Portal.
-   - Navigate to your project:  
-     **Azure Migrate → Migration and modernization → aws-migrate-target**.
+### A. Start Replication
 
-2. **Start Replication**
-   - In the **Migration and modernization** blade, click **Replicate**.
+1. In the **Azure Portal**, open your project:  
+   **Azure Migrate → Migration and modernization → aws-migrate-target**.
+2. At the top of the blade, click **Replicate**.
+3. In the wizard, answer the initial questions:
 
-3. **Source Settings**
-   - **Are your machines virtualized?** → Select **Physical or other (AWS, GCP, Xen, etc.)**.
-   - **Select machines to replicate** → Choose the AWS VM(s) you discovered and want to migrate.
+   - **What do you want to migrate?** → **Servers or virtual machines (VM)**  
+   - **Where do you want to migrate to?** → **Azure VM**  
+   - **Are your machines virtualized?** → **Physical or other (AWS, GCP, Xen, etc.)**  
+   - **On-premises appliance** → Select your registered Azure Migrate **appliance**  
+     > ⚠️ *If the dropdown is empty, it means the appliance is not registered. Go back to Step 5 and re-register the appliance with the Project Key.*
 
 4. **Target Settings**
    - **Subscription** → your target subscription.
