@@ -151,9 +151,6 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
    # If time/clock skew causes Azure sign-in issues, sync time:
    w32tm /resync
    ```
-
----
-
 ### 5.2) Register the Appliance with the Azure Migrate Project
 
 1. In the **Appliance Configuration Manager** (the URL from step 5.1):  
@@ -170,9 +167,6 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
      ```powershell
      taskkill /IM rdpclip.exe /F; Start-Process rdpclip.exe
      ```
-
----
-
 ### 5.3) Configure Accessto AWS EC2 in the Appliance & Start Discovery
 
 1. In the Configuration Manager, select **Add Credentials**:  
@@ -211,53 +205,46 @@ After initiating discovery from the appliance, the results flow into your Azure 
 
 ---
 
-## Step 7 — Run an Assessment 
-
-An assessment helps you determine the Azure readiness of your servers discovered from AWS. Assessments are always tied to a **group of servers**, even if you only plan to migrate a single VM.
-
----
+## 7) Run an Assessment (**target**)
 
 ### 7.1 Open the Assessment Wizard
 1. In the **Azure Portal**, go to **Azure Migrate → your project (`aws-migrate-target`)**.  
-2. Under **Azure Migrate: Discovery and assessment**, click **Assessments**.  
+2. Under **Azure Migrate: Discovery and assessment**, select **Assessments**.  
 3. Click **+ Create assessment**.
 
----
-
 ### 7.2 Configure Assessment Basics
-1. **Assessment type** → Select **Azure VM**.  
-2. **Discovery source** → Choose **Servers discovered from Azure Migrate appliance**.  
-3. **Assessment settings** → Click **Edit** if needed, and confirm:  
-   - **Sizing criteria** → *Performance-based* (recommended).  
-   - **Target location** → your target region (e.g. `Australia Southeast` or `$TGT_LOCATION`).  
-   - **Savings options (Compute)** → choose *3 years reserved* or *Pay-as-you-go* depending on your scenario.  
-   - **Azure Hybrid Benefit** → *No* for Linux VMs (only relevant for Windows).  
-   - **Include security cost estimates** → *Yes, with Microsoft Defender for Cloud* if you want to see those costs.  
-4. Click **Save** to lock in the settings.
-
----
+1. **Assessment type** → select **Azure VM**.  
+2. **Discovery source** → choose **Servers discovered from Azure Migrate appliance**.  
+3. **Assessment settings** → click **Edit** and configure:  
+   - **Default target location** → `Australia East` (or your `$TGT_LOCATION`).  
+   - **Default environment** → **Production (Prod)** (ensures 24×7 cost model, matches EC2 behavior).  
+   - **Currency** → AUD (or your subscription billing currency).  
+   - **Program/offer** → EA subscription.  
+   - **Default savings option** → *Pay-as-you-go* (simplest for lab; use *3-year reserved* only if modeling cost savings).  
+   - **Discount (%)** → `0`.  
+   - **Sizing criteria** → *Performance-based*.  
+   - **Performance history** → `30 days`.  
+   - **Percentile utilization** → `95th`.  
+   - **Comfort factor** → `1.3`.  
+   - **Azure Hybrid Benefit** → **Off** (not applicable to Amazon Linux).  
+   - **Include Microsoft Defender for Cloud** → *Off* (lab) or *On* (if you want security cost shown).  
+4. Click **Save**.
 
 ### 7.3 Select Servers to Assess
-1. Under **Assessment name**, enter a descriptive name (e.g. `aws-linux-assessment`).  
-2. Under **Group**, select **Create new**.  
-   - Enter a **Group name** (e.g. `aws-linux-group`).  
-   - Groups are containers for one or more machines.  
-3. In the server list:  
-   - Appliance = `awsappkey001 (Physical or other)`  
-   - Check the box for your discovered Linux VM(s).  
-   - For this lab, select the single discovered Linux server.  
-
----
+1. **Assessment name** → enter `aws-linux-assessment`.  
+2. **Group** → click **Create new group**.  
+   - **Group name** → enter `aws-linux-group`.  
+   - **Add machines to group** → check your discovered Amazon Linux 2 VM.  
+3. Click **Next**.
 
 ### 7.4 Review + Create
-1. Review all details:  
-   - Assessment name  
-   - Group name  
-   - Selected server(s)  
-   - Assessment settings (sizing, target region, pricing, hybrid benefit, defender costs)  
-2. Click **Create assessment**.
-
----
+1. Review the summary of your configuration and VM selection.  
+2. Click **Create assessment**.  
+3. Wait a few minutes — the status will show **“Assessment being computed”**.  
+4. Once ready, open the assessment report to view:  
+   - **Azure readiness** (Ready, Ready with conditions, or Not ready).  
+   - **Recommended Azure VM SKU**.  
+   - **Estimated monthly cost** (compute, storage, optional Defender).  
 
 ### ✅ Expected Result
 - A **group** (e.g. `aws-linux-group`) is created.  
