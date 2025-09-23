@@ -19,11 +19,11 @@ You will configure Azure Migrate to connect to **AWS (-source)**, discover workl
 ---
 
 ## ✅ Prerequisites
-- **AWS CLI** authenticated with permissions for EC2/AMI/S3.  
-- **Azure CLI** authenticated with subscription access.  
-- **lab3-env.sh** prepared (TARGET RG/VNet/Subnet/NSG).  
-- Appliance deployment permissions in AWS (OVA/AMI import).  
-- Firewall egress open for appliance → Azure communication (HTTPS 443).  
+- **AWS CLI** installed and authenticated with an IAM identity that can read EC2/AMI/Snapshots and manage a Windows EC2 instance for the appliance.  
+- **Azure CLI** installed and authenticated to the target subscription.  
+- **lab3-env.sh** prepared (creates target RG/VNet/Subnet/NSG).  
+- Ability to open outbound **HTTPS (443)** from the appliance VM to Azure.  
+- RDP access to the Windows appliance VM.  
 
 ---
 
@@ -47,300 +47,262 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
 ## 2) Provision an Azure Migrate Project (**target**)
 
 1. In the **Azure Portal**, search for **Azure Migrate**.  
-2. Click Servers, databases and web apps
+2. Click **Servers, databases and web apps**.  
 3. Create a project:  
-   - **Subscription**: Azure subscription 1
-   - **Resource group**: rg-migrate-target
-   - **Project name**: aws-migrate-target
-   - **Geography**: Australia
-   - **Connectivity method**: Public endpoint
-4. **Create**
+   - **Subscription**: Azure subscription 1  
+   - **Resource group**: `rg-migrate-target`  
+   - **Project name**: `aws-migrate-target`  
+   - **Geography**: Australia  
+   - **Connectivity method**: Public endpoint  
+4. Click **Create**.
 
-> ⚠️ Although `lab3-env.sh` can attempt to create a project (`CREATE_MIGRATE_PROJECT=true`), the **Portal is the recommended method**.
+> `lab3-env.sh` can also create the project, but the **Portal** flow is recommended for clarity.
 
 ---
 
 ## 3) In the Azure Portal
-- Open your **Azure Migrate project → aws-migrate-target**.
-- Under **Migration tools → Migration and modernization**, click **Discover**.
-- Select **Using appliance** (✅ correct for this lab).
-- When asked **Are your servers virtualized?**
-  - Select **Physical or other (AWS, GCP, Xen, etc.)**.
-- You will see the guided steps to deploy the appliance.
 
-- **Generate Project Key**
-  - Enter a name for your appliance (e.g., `awsappkey001`).
-  - Click **Generate key** → wait for the key to be created.
-  - Azure will display:  
-    *“Checking prerequisites and creating the required Azure resources. This may take a few minutes.”*
-  - Copy the **Project Key** — you will need it when registering the appliance.
-  - Note: Azure automatically creates resources for migration tracking in your subscription.
+- Open **Azure Migrate → aws-migrate-target**.  
+- Under **Migration tools → Migration and modernization**, click **Discover**.  
+- Select **Using appliance**.  
+- For **Are your servers virtualized?** select **Physical or other (AWS, GCP, Xen, etc.)**.  
 
-- **Download the Appliance Package**
-  - Download the `.zip` package (~500 MB).
-  - The package contains a PowerShell script to install the appliance.
-  - This file must be copied into a **Windows Server VM** that you will prepare in AWS.
+### Generate Project Key
+- Enter an appliance name (e.g., `awsappkey001`).  
+- Click **Generate key** and wait for the operation to finish.  
+- Copy the **Project Key** (used to register the appliance).  
+
+### Download the Appliance Package
+- Download the `.zip` package (~500 MB).  
+- This package contains **AzureMigrateInstaller.ps1** which sets up the appliance on Windows.  
+- Copy the `.zip` to a Windows Server VM you will create in AWS (next step).
 
 ---
 
 ## 4) Create the Appliance VM in AWS EC2
-- **Launch Instance**
-  - Go to **EC2 → Launch instance**.
-  - Name the instance: `AWS-Appliance-VM`.
-  - (Optional) Add tags such as:
-    - `Project = AzureMigrate`
-    - `Role = Appliance`
 
-- **Choose AMI**
-  - Select a supported Windows Server image:
-    - Name: **AWS-Appliance-VM**
-    - Recommended: **Windows Server 2022 Datacenter (64-bit, x86)**.
-    - If unavailable, you may see **Windows Server 2025**. While it may work, only 2016/2019/2022 are officially supported.
-  - Example AMI ID (region-specific): `ami-09bbc01c23bd07334`.
-  - Default username: `Administrator`.
-
-- **Instance Type**
-  - Select: **c5.2xlarge** (8 vCPUs, 16 GiB memory).
-  - Meets Microsoft’s minimum appliance requirements.
-
-- **Key Pair (Login)**
-  - Select an existing **key pair** or create a new one.
-  - Download the `.pem` file if new.
-  - Required to decrypt the Windows Administrator password after launch.
-
-- **Network Settings**
-  - VPC: Use default or one with Internet access.
-  - Subnet: Any with outbound Internet.
-  - Auto-assign Public IP: **Enable**.
-  - Security Group: Add inbound rules:
-    - RDP (TCP/3389) → Source: restrict to **your IP** if possible.
-    - HTTPS (TCP/443) → Source: **0.0.0.0/0** (required for Azure communication).
-    - HTTP (TCP/80) → Source: **0.0.0.0/0** (optional, not required for appliance).
-  - Outbound: Allow all (default).
-
-- **Storage**
-  - Root volume:
-    - Size: **80 GiB**
-    - Type: **gp3 SSD**
-    - IOPS: default (3000)
-    - Encryption: optional.
-
-- **Advanced Details**
-  - CPU options: default (8 vCPUs).
-  - Metadata: Version 2 only (token required).
-  - Shutdown behavior: Stop.
-  - Tenancy: Shared.
-  - EBS-optimized: Enabled.
-
-- **Review and Launch**
-  - Review all settings.
-  - Click **Launch instance**.
-  - When running, go to **Connect → RDP client** in the AWS console.
-  - Use your key pair to decrypt the **Administrator password**.
-  - Connect to the Windows VM via RDP.
+- **Launch instance** → Name: `AWS-Appliance-VM`.  
+- **AMI**: Windows Server **2022 Datacenter (64-bit)** (2016/2019/2022 are supported).  
+- **Instance type**: `c5.2xlarge` (8 vCPU, 16 GiB).  
+- **Key pair**: Select or create; keep `.pem` to decrypt `Administrator` password.  
+- **Network**: Public IP = **Enabled**; Subnet with Internet egress.  
+- **Security group**:  
+  - Inbound: **RDP 3389** (restrict to your IP).  
+  - Inbound: **HTTPS 443** (0.0.0.0/0).  
+  - Inbound: **HTTP 80** (optional).  
+  - Outbound: **Allow all**.  
+- **Storage**: Root 80 GiB **gp3** SSD.  
+- **Launch** → Decrypt `Administrator` password → **RDP** into the VM.
 
 ---
 
 ## 5) Set Up and Configure the Appliance
 
-### 5.1) Install the Appliance
-- RDP into the Windows Server VM with admin rights.
-- Copy the downloaded `.zip` package into the VM.
-- Extract the `.zip` file to a local folder (e.g., `C:\AzureMigrateAppliance\`).
-- Open **Windows PowerShell as Administrator**.
-- Navigate to the extracted folder:
-  ```powershell
-  cd "C:\AzureMigrateAppliance"
-  ```
-- (Optional) Unblock downloaded files:
-  ```powershell
-  Get-ChildItem -Recurse | Unblock-File
-  ```
-- (If blocked by execution policy) allow script execution temporarily:
-  ```powershell
-  Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-  ```
-- Run the installer script:
-  ```powershell
-  .\AzureMigrateInstaller.ps1
-  ```
+### 5.1) Install the Appliance (Windows VM)
 
-#### ⚠️ Known Issue: `PowerShell-ISE` Not Found (Windows Server 2022/2025)
-- You may see:
-  ```
-  Install-WindowsFeature : ArgumentNotValid: The role, role service, or feature name is not valid: 'PowerShell-ISE'.
-  ```
-- **Reason:** PowerShell ISE is deprecated and not required.  
-- **Fix A — Manually install required IIS/WAS roles (excluding ISE):**
-  ```powershell
-  Install-WindowsFeature WAS, WAS-Process-Model, WAS-Config-APIs, `
-    Web-Server, Web-WebServer, Web-Mgmt-Service, Web-Request-Monitor, `
-    Web-Common-Http, Web-Static-Content, Web-Default-Doc, Web-Dir-Browsing, Web-Http-Errors, `
-    Web-App-Dev, Web-CGI, `
-    Web-Health, Web-Http-Logging, Web-Log-Libraries, `
-    Web-Security, Web-Filtering, `
-    Web-Performance, Web-Stat-Compression, `
-    Web-Mgmt-Tools, Web-Mgmt-Console, Web-Scripting-Tools, `
-    Web-Asp-Net45, Web-Net-Ext45, `
-    Web-Http-Redirect, Web-Windows-Auth, Web-Url-Auth
-  ```
-  (Optional) Verify installed roles:
-  ```powershell
-  Get-WindowsFeature | Where-Object {$_.InstallState -eq "Installed"} | Select-Object DisplayName, Name
-  ```
-  Re-run the installer:
-  ```powershell
-  .\AzureMigrateInstaller.ps1
-  ```
-- **Fix B — If the script still tries to add ISE, remove it from the script:**
-  ```powershell
-  # Backup the installer
-  Copy-Item .\AzureMigrateInstaller.ps1 .\AzureMigrateInstaller.ps1.bak
-
-  # Remove 'PowerShell-ISE' from Install-WindowsFeature lines
-  (Get-Content .\AzureMigrateInstaller.ps1) `
-    -replace 'PowerShell-ISE,?\s*', '' `
-    | Set-Content .\AzureMigrateInstaller.ps1
-
-  # Run again
-  .\AzureMigrateInstaller.ps1
-  ```
-
-- Once resolved, the installer completes, installs prerequisites, and shows the **Appliance Configuration Manager URL** (e.g., `https://<VMName>:44368`).
-
-### 5.2) Configure and Start Discovery
-- Open the **Appliance Configuration Manager** in a browser on the VM using the provided URL.
-- Paste the **Project Key** you generated earlier.
-- Sign in with your **Azure account** to register the appliance with the project.
-- Provide **AWS IAM credentials** (user or role) so the appliance can query AWS APIs.
-- *(Optional)* For **dependency mapping**:
-  - Provide Linux/Windows guest OS credentials in the configuration manager, or
-  - Install the **Dependency Agent** on your AWS VMs.
-- Start discovery.
-
-### ✅ Expected Result
-- The appliance VM is running in AWS.
-- In the Azure Portal, the appliance shows as **Connected** under *Discover*.
-- Within ~15–30 minutes, discovered AWS EC2 instances (Linux or Windows) appear in your project.
+1. **Copy & extract** the Azure Migrate appliance `.zip` to `C:\AzureMigrateAppliance`.  
+2. **Open 64-bit PowerShell as Administrator**:  
+   - Start → Windows PowerShell → **Run as administrator**.  
+   - Verify:  
+     ```powershell
+     [Environment]::Is64BitProcess   # must return True
+     ```
+   - If `False`, start explicitly:  
+     ```powershell
+     & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
+     ```
+3. **Prepare & run installer**:  
+   ```powershell
+   Set-Location "C:\AzureMigrateAppliance"
+   Set-ExecutionPolicy -Scope Process Bypass -Force
+   Get-ChildItem -Recurse | Unblock-File
+   .\AzureMigrateInstaller.ps1
+   ```
+4. **If you hit the deprecated PowerShell ISE feature error** on Windows Server 2022/2025:  
+   - Run installer prerequisites **without** ISE and re-run:  
+     ```powershell
+     Install-WindowsFeature WAS, WAS-Process-Model, WAS-Config-APIs, `
+       Web-Server, Web-WebServer, Web-Mgmt-Service, Web-Request-Monitor, `
+       Web-Common-Http, Web-Static-Content, Web-Default-Doc, Web-Dir-Browsing, Web-Http-Errors, `
+       Web-App-Dev, Web-CGI, `
+       Web-Health, Web-Http-Logging, Web-Log-Libraries, `
+       Web-Security, Web-Filtering, `
+       Web-Performance, Web-Stat-Compression, `
+       Web-Mgmt-Tools, Web-Mgmt-Console, Web-Scripting-Tools, `
+       Web-Asp-Net45, Web-Net-Ext45, `
+       Web-Http-Redirect, Web-Windows-Auth, Web-Url-Auth
+     .\AzureMigrateInstaller.ps1
+     ```
+   - Or remove ISE from the script and run again:  
+     ```powershell
+     Copy-Item .\AzureMigrateInstaller.ps1 .\AzureMigrateInstaller.ps1.bak
+     (Get-Content .\AzureMigrateInstaller.ps1) -replace 'PowerShell-ISE,?\s*', '' | Set-Content .\AzureMigrateInstaller.ps1
+     .\AzureMigrateInstaller.ps1
+     ```
+5. **Confirm the configuration UI is reachable** (the installer prints a URL like `https://<VMName>:44368`):  
+   ```powershell
+   $u = "https://$env:COMPUTERNAME:44368"
+   Test-NetConnection -ComputerName $env:COMPUTERNAME -Port 44368   # should be TcpTestSucceeded = True
+   Start-Process $u   # accept the self-signed cert warning in the browser
+   ```
+6. **If the site doesn’t load**:  
+   ```powershell
+   iisreset
+   # If time/clock skew causes Azure sign-in issues, sync time:
+   w32tm /resync
+   ```
+7. **Logs** (for any install issues):  
+   `C:\ProgramData\Microsoft Azure\Logs\AzureMigrateScenarioInstaller_*.log`
 
 ---
 
-## 6) Discover AWS VMs (**source**)
+### 5.2) Register the Appliance with the Azure Migrate Project
 
-1. In the Azure Migrate portal, go back to the **Discover** wizard.  
-2. Confirm appliance connectivity.  
-3. Select **Discover machines**.  
-4. Appliance will:  
-   - Collect inventory of **EC2 instances**.  
-   - Pull **performance data** (CPU, memory, disk).  
-   - Identify **dependencies** (if dependency mapping enabled).  
+1. In the **Appliance Configuration Manager** (the URL from step 5.1):  
+   - Continue past the certificate warning (self-signed).  
+   - Paste the **Project Key** generated in Step 3.  
+   - Click **Login** and sign in with your **Azure account** that has access to the project.  
+2. Wait until the UI shows the appliance is **Registered**/**Connected** to your Azure Migrate project.  
+3. **If Azure sign-in fails** (common causes):  
+   - Ensure the PowerShell/browser session is on the **VM** (not your local PC).  
+   - Verify outbound **443** to Azure is allowed by the instance’s security group/NACL.  
+   - Run `w32tm /resync` to fix time skew and retry sign-in.  
+   - If copy/paste is flaky in RDP for the Project Key, restart RDP clipboard:  
+     ```powershell
+     taskkill /IM rdpclip.exe /F; Start-Process rdpclip.exe
+     ```
 
 ---
 
-## 7) Run an Assessment (**target**)
+### 5.3) Configure AWS Access in the Appliance & Start Discovery
 
-1. In the Azure Migrate project, open **Assessments** → **+ Create assessment**.  
-2. Select the discovered AWS VMs.  
-3. Configure:  
-   - **Target region**: `$TGT_LOCATION`  
-   - **Sizing criteria**:  
-     - **Performance-based** (uses collected CPU/RAM/IO counters to right-size), or  
-     - **As-on-prem** (mirrors current vCPU/RAM)  
-   - **Pricing**: **Pay-as-you-go** (or **Azure Hybrid Benefit** if eligible)  
-4. Review **readiness** (green/yellow/red), **recommended SKU**, and **estimated monthly cost**.
+1. In the Configuration Manager, add **AWS account**:  
+   - Choose **Access key** authentication.  
+   - Enter **Access Key ID** and **Secret Access Key** of an AWS IAM principal with **read-only** permissions for EC2 (and S3 read if your environment requires it).  
+   - A safe choice is to attach AWS managed policies:  
+     - **AmazonEC2ReadOnlyAccess**  
+     - **AmazonS3ReadOnlyAccess** (only if S3 read is needed in your environment)  
+2. Select the **AWS regions** that contain your EC2 instances.  
+3. (Optional) For **dependency mapping**:  
+   - Provide **Windows/Linux guest credentials** here, or install the **Dependency Agent** on source VMs.  
+4. Click **Start discovery**.  
+5. Confirm the status changes to **Connected / Discovering**.  
+
+**Expected:** Within ~15–30 minutes, discovered EC2 instances begin to appear in your Azure Migrate project (Step 6).
+
+---
+
+## 6) View Discovered AWS VMs (**source**)
+
+1. In Azure Portal → **Azure Migrate → Migration and modernization**.  
+2. Open **Discovered servers** (or **Machines**).  
+3. Verify:  
+   - EC2 instances are listed with OS, cores, memory, and region.  
+   - If dependency mapping was enabled, dependency data will populate progressively.  
+4. If nothing appears after ~30 minutes:  
+   - Re-open the appliance UI and verify **AWS credentials**, **selected regions**, and **Connected** status.  
+   - Check outbound connectivity from the appliance (HTTPS 443).  
+
+---
+
+## 7) Create and Review an Assessment (**target**)
+
+1. In the project, go to **Assessments → + Create assessment**.  
+2. Select the discovered AWS VMs for the assessment.  
+3. Configure assessment settings:  
+   - **Target region:** `$TGT_LOCATION`  
+   - **Sizing:** **Performance-based** (recommended) or **As-on-prem**  
+   - **Pricing:** **Pay-as-you-go** (or **Azure Hybrid Benefit** if eligible)  
+4. Create the assessment and open it to review:  
+   - **Readiness** (green/yellow/red) with reasons.  
+   - **Recommended Azure VM SKUs** per machine.  
+   - **Cost estimates** for compute and storage.  
+5. Adjust settings and re-run if the SKUs/cost don’t align with your objectives.
 
 ---
 
 ## 8) Configure Replication (**source → target**)
 
-1. In **Azure Migrate → Replicate**, select the AWS VMs.  
-2. Configure replication:
-   - **Target Subscription & RG**: `$TGT_RG`  
-   - **Target VNet/Subnet**: `$TGT_VNET` / `$TGT_SUBNET`  
-   - **NSG**: `$TGT_NSG`  
-3. Review **Advanced** (recommended):
-   - **Disk selection & type** (OS + data disks; Premium/Standard)  
-   - **Availability** (none / Zone / Availability Set)  
-   - **Target VM size** (override if required)  
-   - **Public IP** (enable if you plan to SSH/HTTP directly for validation)  
-   - **Licensing** (Azure Hybrid Benefit if eligible)
+1. In **Azure Migrate → Replicate**, select the AWS VMs to migrate.  
+2. **Target settings:**  
+   - **Subscription**: your target subscription  
+   - **Resource group**: `$TGT_RG`  
+   - **Virtual network / Subnet**: `$TGT_VNET` / `$TGT_SUBNET`  
+   - **Network security group**: `$TGT_NSG`  
+3. **Compute & storage details:**  
+   - **Target VM size**: accept recommendation or override.  
+   - **Availability options**: None / Zone / Availability Set.  
+   - **OS & data disks**: choose disk types (Premium/Standard).  
+   - **Public IP**: enable if you plan to validate via SSH/RDP/HTTP directly.  
+   - **Licensing**: enable Azure Hybrid Benefit if you’re eligible.  
+4. Start replication and monitor **Jobs** and **Replicated items** for progress.  
 
-> After you start replication, monitor progress in **Replicated items**.
+**Tip:** If a machine has large disks, initial sync can take time. Ensure appliance stays powered and connected.
 
 ---
 
-## 9) Perform Cutover (**target**)
+## 9) Perform Cutover to Azure (**target**)
 
-1. Verify **Compute quotas** in `$TGT_LOCATION` (insufficient vCPUs will block cutover).  
-2. In **Azure Migrate → Replicated items**, select the VM → **Migrate**.  
-3. Choose **Shut down and cut over** (optional shutdown of the AWS source).  
-4. Azure Migrate performs a final sync and creates an **Azure VM** in `$TGT_RG`.
+1. **Check Azure quotas** in `$TGT_LOCATION` (insufficient vCPU/cores will block cutover). Quick CLI check:  
+   ```bash
+   az vm list-usage -l "$TGT_LOCATION" -o table
+   ```
+2. In **Replicated items**, select each VM → **Migrate**.  
+3. Choose whether to **Shut down the source** (optional).  
+4. Azure Migrate runs a final sync and creates an **Azure VM** in `$TGT_RG`.  
+5. Verify the VM resource shows **Running**.
 
-After cutover, identify the actual VM name and IP:
-
+**Identify the new VM and IP:**  
 ```bash
-# Show the most recently created VM in the target RG (adjust if needed)
 VM_NAME=$(az vm list -g "$TGT_RG" --query "[-1].name" -o tsv)
 echo "Created VM: $VM_NAME"
-
 PUBLIC_IP=$(az vm show -d -g "$TGT_RG" -n "$VM_NAME" --query publicIps -o tsv)
 echo "Public IP: ${PUBLIC_IP:-<none>}"
 ```
-
-> If there is **no Public IP**, validate via **Azure Bastion** or attach a temporary public IP to the NIC.
 
 ---
 
 ## 10) Validate the Migrated VM (**target**)
 
-```bash
-# If a Public IP exists:
-VM_NAME=$(az vm list -g "$TGT_RG" --query "[-1].name" -o tsv)
-PUBLIC_IP=$(az vm show -d -g "$TGT_RG" -n "$VM_NAME" --query publicIps -o tsv)
-
-echo "VM_NAME=$VM_NAME"
-echo "PUBLIC_IP=${PUBLIC_IP:-<none>}"
-
-# SSH (Linux) — replace <username> with your expected user for the image
-ssh <username>@"$PUBLIC_IP" hostname
-
-# Optional web check if you know the workload exposes HTTP:
-curl -I "http://$PUBLIC_IP"
-```
-
-> **No Public IP?** Use **Azure Bastion** from the VM’s **Connect** menu, or attach a temporary public IP.
+- **Linux**:  
+  ```bash
+  ssh <username>@$PUBLIC_IP hostname
+  ```
+- **Windows**: Use **RDP** or **Azure Bastion** from the VM’s **Connect** menu.  
+- **HTTP check** (if applicable):  
+  ```bash
+  curl -I http://$PUBLIC_IP
+  ```
+- Validate application services and logs as appropriate for your workload.
 
 ---
 
 ## 11) Cleanup (Optional)
 
-- **Azure**  
-  ```bash
-  ./lab3-env.sh cleanup
-  ```  
+**Azure**  
+```bash
+./lab3-env.sh cleanup
+```
 
-- **AWS**  
-  - Terminate the **Azure Migrate appliance** EC2 instance.  
-  - Remove **temporary IAM users/roles/keys** created for the appliance.  
-  - Delete any **S3 import buckets**, **snapshots/AMIs**, or other temporary artifacts used during the appliance import process.
+**AWS**  
+- Terminate the **Azure Migrate appliance** EC2 instance.  
+- Remove any **temporary IAM users/roles/keys** created for discovery.  
+- Delete **temporary artifacts** used during setup (e.g., S3 objects, snapshots) if applicable.
 
 ---
 
-## 🔧 Quick Troubleshooting Tips
+## 🔧 Troubleshooting Reference
 
-- **Appliance not showing as connected:** Confirm outbound **HTTPS (443)** from the appliance to Azure; configure proxy if required.  
-- **No machines discovered:** Re-check AWS credentials in the appliance and region selection.  
-- **Dependency maps empty:** Install the dependency agent or provide guest credentials during discovery.  
-- **Cutover fails:** Check **Compute quotas** in `$TGT_LOCATION` and **target VM SKU** availability.  
-- **Can’t SSH/HTTP:** Ensure replication config included a **Public IP**, or use **Azure Bastion**. Verify NSG rules on `$TGT_NSG`.
+- **Appliance UI not loading** → `Test-NetConnection $env:COMPUTERNAME -Port 44368`, run `iisreset`.  
+- **Still can’t sign in to Azure** → ensure outbound 443, sync time (`w32tm /resync`).  
+- **No machines discovered** → verify AWS credentials/regions in the appliance UI and that the status is **Connected**.  
+- **Cutover blocked** → check region quotas (`az vm list-usage`), ensure target VM size is available in `$TGT_LOCATION`.  
+- **Cannot SSH/HTTP to VM** → ensure Public IP assigned or use Bastion; verify NSG `$TGT_NSG` allows required inbound ports.  
 
 ---
 
 ## 📘 Notes
-- This lab uses **Azure Migrate: Server Migration** with the AWS connector, not manual VHD export.  
-- Benefits include:  
-  - Automated discovery, dependency mapping, and assessments.  
-  - Continuous replication, test failover, and orchestrated cutover.  
-- This is the **recommended production workflow** for cross-cloud rehost migrations.  
+- This lab uses **Azure Migrate: Server Migration** with the AWS connector (appliance-based discovery/replication).  
+- Recommended workflow: discover → assess → replicate → (optional test) → cutover → validate.  
 
-✅ **End of Lab** — You migrated AWS EC2 workloads (**-source**) into Azure (**-target**) using Azure Migrate.
+✅ **End of Lab** — You migrated AWS EC2 workloads (**source**) into Azure (**target**) using Azure Migrate.
