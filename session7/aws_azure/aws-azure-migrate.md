@@ -143,7 +143,7 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
 
 ## 5) Set Up and Configure the Appliance
 
-- **Install the Appliance**
+### 5.1) Install the Appliance
   - RDP into the Windows Server VM with admin rights.
   - Copy the downloaded `.zip` package into the VM.
   - Extract the `.zip` file to a local folder (e.g., `C:\AzureMigrateAppliance\`).
@@ -181,7 +181,7 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
   - Wait for the installer to complete. It installs prerequisites and appliance services.
   - Note the **Appliance Configuration Manager URL** (e.g., `https://<VMName>:44368`).
 
-- **Configure and Start Discovery**
+### 5.2) Configure and Start Discovery
   - Open the **Appliance Configuration Manager** in a browser on the VM using the provided URL.
   - Paste the **Project Key** you generated earlier.
   - Sign in with your **Azure account** to register the appliance with the project.
