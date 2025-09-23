@@ -60,80 +60,129 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
 
 ---
 
-## 3) Deploy the Azure Migrate Appliance (AWS source)
-
-### In the Azure Portal
+## 3) In the Azure Portal
 - Open your **Azure Migrate project → aws-migrate-target**.
 - Under **Migration tools → Migration and modernization**, click **Discover**.
 - Select **Using appliance** (✅ correct for this lab).
 - When asked **Are your servers virtualized?**
   - Select **Physical or other (AWS, GCP, Xen, etc.)**.
-- You will see the guided steps to deploy the appliance:
+- You will see the guided steps to deploy the appliance.
 
-  - **1. Generate project key**
-    - Enter a name for your appliance (e.g., `awsappkey001`).
-    - Click **Generate key** → wait for the key to be created.
-    - Azure will display a message:  
-      *“Checking prerequisites and creating the required Azure resources. This may take a few minutes.”*
-    - Copy the **Project Key** — you will need it when registering the appliance.
-    - Note: Azure automatically creates some resources in your subscription for migration tracking.
+- **Generate Project Key**
+  - Enter a name for your appliance (e.g., `awsappkey001`).
+  - Click **Generate key** → wait for the key to be created.
+  - Azure will display:  
+    *“Checking prerequisites and creating the required Azure resources. This may take a few minutes.”*
+  - Copy the **Project Key** — you will need it when registering the appliance.
+  - Note: Azure automatically creates resources for migration tracking in your subscription.
 
-  - **2. Download Azure Migrate appliance**
-    - Download the `.zip` package (~500 MB).
-    - The package contains a PowerShell script to install the appliance.
-    - This file must be copied into a **Windows Server VM** that you will prepare in AWS.
+- **Download the Appliance Package**
+  - Download the `.zip` package (~500 MB).
+  - The package contains a PowerShell script to install the appliance.
+  - This file must be copied into a **Windows Server VM** that you will prepare in AWS.
 
-  - **3. Set up the appliance**
-    - Provision a **Windows Server 2022 VM** in AWS EC2:
-      - Minimum requirements:
-        - **8 vCPUs**
-        - **16 GB RAM**
-        - **80 GB disk**
-      - Place the VM in a subnet with outbound Internet access.
-      - Ensure outbound **HTTPS (443)** to Azure endpoints is allowed in the Security Group/NACL.
-    - RDP into the Windows Server VM with administrator privileges.
-    - Copy the downloaded `.zip` package into the VM.
-    - Extract the `.zip` file to a local folder (e.g., `C:\AzureMigrateAppliance\`).
-    - Open **Windows PowerShell as Administrator**.
-    - Navigate to the extracted folder:
-      ```powershell
-      cd "C:\AzureMigrateAppliance\"
-      ```
-    - (Optional) Unblock downloaded files:
-      ```powershell
-      Get-ChildItem -Recurse | Unblock-File
-      ```
-    - (If execution policy blocks scripts) allow execution temporarily:
-      ```powershell
-      Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-      ```
-    - Run the installer script provided in the package:
-      ```powershell
-      .\AzureMigrateInstaller.ps1
-      ```
-    - Wait for the installer to complete. It installs prerequisites and services.
-    - At the end, note the **Appliance Configuration Manager URL** (for example: `https://<VMName>:44368`).
+---
 
-  - **4. Configure the appliance and initiate discovery**
-    - Open the **Appliance Configuration Manager** in a browser on the VM using the URL provided by the installer.
-    - Paste the **Project Key** you generated earlier.
-    - Sign in with your **Azure account** to register the appliance with the `aws-migrate-target` project.
-    - Provide **AWS IAM credentials** (user or role) so the appliance can connect to AWS APIs and discover EC2 instances.
-    - *(Optional)* For **dependency mapping**:
-      - Provide Linux guest OS credentials in the configuration manager, or
-      - Install the **Dependency Agent** on your AWS Linux VMs.
-    - Start the discovery process.
+## 4) Create the Appliance VM in AWS EC2
+- **Launch Instance**
+  - Go to **EC2 → Launch instance**.
+  - Name the instance: `AWS-Appliance-VM`.
+  - (Optional) Add tags such as:
+    - `Project = AzureMigrate`
+    - `Role = Appliance`
+
+- **Choose AMI**
+  - Select a supported Windows Server image:
+    - Recommended: **Windows Server 2022 Datacenter (64-bit, x86)**.
+    - If unavailable, you may see **Windows Server 2025**. While it may work, only 2016/2019/2022 are officially supported.
+  - Example AMI ID (region-specific): `ami-09bbc01c23bd07334`.
+  - Default username: `Administrator`.
+
+- **Instance Type**
+  - Select: **c5.2xlarge** (8 vCPUs, 16 GiB memory).
+  - Meets Microsoft’s minimum appliance requirements.
+
+- **Key Pair (Login)**
+  - Select an existing **key pair** or create a new one.
+  - Download the `.pem` file if new.
+  - Required to decrypt the Windows Administrator password after launch.
+
+- **Network Settings**
+  - VPC: Use default or one with Internet access.
+  - Subnet: Any with outbound Internet.
+  - Auto-assign Public IP: **Enable**.
+  - Security Group: Add inbound rules:
+    - RDP (TCP/3389) → Source: restrict to **your IP** if possible.
+    - HTTPS (TCP/443) → Source: **0.0.0.0/0** (required for Azure communication).
+    - HTTP (TCP/80) → Source: **0.0.0.0/0** (optional, not required for appliance).
+  - Outbound: Allow all (default).
+
+- **Storage**
+  - Root volume:
+    - Size: **80 GiB**
+    - Type: **gp3 SSD**
+    - IOPS: default (3000)
+    - Encryption: optional.
+
+- **Advanced Details**
+  - CPU options: default (8 vCPUs).
+  - Metadata: Version 2 only (token required).
+  - Shutdown behavior: Stop.
+  - Tenancy: Shared.
+  - EBS-optimized: Enabled.
+
+- **Review and Launch**
+  - Review all settings.
+  - Click **Launch instance**.
+  - When running, go to **Connect → RDP client** in the AWS console.
+  - Use your key pair to decrypt the **Administrator password**.
+  - Connect to the Windows VM via RDP.
+
+---
+
+## 5) Set Up and Configure the Appliance
+- **Install the Appliance**
+  - RDP into the Windows Server VM with admin rights.
+  - Copy the downloaded `.zip` package into the VM.
+  - Extract the `.zip` file to a local folder (e.g., `C:\AzureMigrateAppliance\`).
+  - Open **Windows PowerShell as Administrator**.
+  - Navigate to the extracted folder:
+    ```powershell
+    cd "C:\AzureMigrateAppliance\"
+    ```
+  - (Optional) Unblock downloaded files:
+    ```powershell
+    Get-ChildItem -Recurse | Unblock-File
+    ```
+  - (If blocked by execution policy) allow script execution temporarily:
+    ```powershell
+    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+    ```
+  - Run the installer script:
+    ```powershell
+    .\AzureMigrateInstaller.ps1
+    ```
+  - Wait for the installer to complete. It installs prerequisites and appliance services.
+  - Note the **Appliance Configuration Manager URL** (e.g., `https://<VMName>:44368`).
+
+- **Configure and Start Discovery**
+  - Open the **Appliance Configuration Manager** in a browser on the VM using the provided URL.
+  - Paste the **Project Key** you generated earlier.
+  - Sign in with your **Azure account** to register the appliance with the project.
+  - Provide **AWS IAM credentials** (user or role) so the appliance can query AWS APIs.
+  - *(Optional)* For **dependency mapping**:
+    - Provide Linux guest OS credentials in the configuration manager, or
+    - Install the **Dependency Agent** on your AWS VMs.
+  - Start discovery.
 
 ### ✅ Expected Result
 - The appliance VM is running in AWS.
 - In the Azure Portal, the appliance shows as **Connected** under *Discover*.
-- Within ~15–30 minutes, discovered AWS EC2 instances (Linux or Windows) begin appearing in your project.
-
-
+- Within ~15–30 minutes, discovered AWS EC2 instances (Linux or Windows) appear in your project.
 
 ---
 
-## 4) Discover AWS VMs (**source**)
+## 6) Discover AWS VMs (**source**)
 
 1. In the Azure Migrate portal, go back to the **Discover** wizard.  
 2. Confirm appliance connectivity.  
@@ -145,7 +194,7 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
 
 ---
 
-## 5) Run an Assessment (**target**)
+## 7) Run an Assessment (**target**)
 
 1. In the Azure Migrate project, open **Assessments** → **+ Create assessment**.  
 2. Select the discovered AWS VMs.  
@@ -159,7 +208,7 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
 
 ---
 
-## 6) Configure Replication (**source → target**)
+## 8) Configure Replication (**source → target**)
 
 1. In **Azure Migrate → Replicate**, select the AWS VMs.  
 2. Configure replication:
@@ -177,7 +226,7 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
 
 ---
 
-## 7) Perform Cutover (**target**)
+## 9) Perform Cutover (**target**)
 
 1. Verify **Compute quotas** in `$TGT_LOCATION` (insufficient vCPUs will block cutover).  
 2. In **Azure Migrate → Replicated items**, select the VM → **Migrate**.  
@@ -199,7 +248,7 @@ echo "Public IP: ${PUBLIC_IP:-<none>}"
 
 ---
 
-## 8) Validate the Migrated VM (**target**)
+## 10) Validate the Migrated VM (**target**)
 
 ```bash
 # If a Public IP exists:
@@ -220,7 +269,7 @@ curl -I "http://$PUBLIC_IP"
 
 ---
 
-## 9) Cleanup (Optional)
+## 11) Cleanup (Optional)
 
 - **Azure**  
   ```bash
