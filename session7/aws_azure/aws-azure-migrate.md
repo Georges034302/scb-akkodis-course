@@ -151,8 +151,6 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
    # If time/clock skew causes Azure sign-in issues, sync time:
    w32tm /resync
    ```
-7. **Logs** (for any install issues):  
-   `C:\ProgramData\Microsoft Azure\Logs\AzureMigrateScenarioInstaller_*.log`
 
 ---
 
@@ -175,50 +173,103 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
 
 ---
 
-### 5.3) Configure AWS Access in the Appliance & Start Discovery
+### 5.3) Configure Accessto AWS EC2 in the Appliance & Start Discovery
 
-1. In the Configuration Manager, add **AWS account**:  
-   - Choose **Access key** authentication.  
-   - Enter **Access Key ID** and **Secret Access Key** of an AWS IAM principal with **read-only** permissions for EC2 (and S3 read if your environment requires it).  
-   - A safe choice is to attach AWS managed policies:  
-     - **AmazonEC2ReadOnlyAccess**  
-     - **AmazonS3ReadOnlyAccess** (only if S3 read is needed in your environment)  
-2. Select the **AWS regions** that contain your EC2 instances.  
-3. (Optional) For **dependency mapping**:  
-   - Provide **Windows/Linux guest credentials** here, or install the **Dependency Agent** on source VMs.  
-4. Click **Start discovery**.  
-5. Confirm the status changes to **Connected / Discovering**.  
+1. In the Configuration Manager, select **Add Credentials**:  
+   - Select the type of EC2 you want to migrate
+   - Select the type of authentication on the EC2 (e.g. SSH, password)
+2. In the Configuration Manager, select **Add discovery source**:  
+   - Select the EC2 type
+   - select the name associated with correc credentials from previous step
+   - EC2 must be running --> copy and paste the public IP of the EC2  
+3. Start Discovery
 
-**Expected:** Within ~15–30 minutes, discovered EC2 instances begin to appear in your Azure Migrate project (Step 6).
+**Expected:** Within ~15–30 minutes,Discovery has been successfully initiated. Go to the Azure portal to review the discovered inventory. 
 
 ---
 
-## 6) View Discovered AWS VMs (**source**)
+## Step 6 — View Discovered AWS VMs (Source)
 
-1. In Azure Portal → **Azure Migrate → Migration and modernization**.  
-2. Open **Discovered servers** (or **Machines**).  
-3. Verify:  
-   - EC2 instances are listed with OS, cores, memory, and region.  
-   - If dependency mapping was enabled, dependency data will populate progressively.  
-4. If nothing appears after ~30 minutes:  
-   - Re-open the appliance UI and verify **AWS credentials**, **selected regions**, and **Connected** status.  
-   - Check outbound connectivity from the appliance (HTTPS 443).  
+After initiating discovery from the appliance, the results flow into your Azure Migrate project.
+
+1. In the **Azure Portal**, go to **Azure Migrate → your project (`aws-migrate-target`)**.  
+2. Under **Azure Migrate: Migration and modernization**, click **Discovered servers**.  
+3. Verify the following:  
+   - Your AWS EC2 instances are listed.  
+   - Each entry shows **OS type** (Linux/Windows), **cores**, **memory**, and **IP address**.  
+   - If you enabled **dependency mapping** and provided guest OS credentials, dependency data will begin to populate (this can take time).  
+4. If no machines appear after ~30 minutes:  
+   - Reopen the **Appliance Configuration Manager**.  
+   - Verify the **AWS IAM credentials** are valid and regions are correctly selected.  
+   - Ensure the appliance shows as **Connected**.  
+   - Confirm outbound connectivity on **HTTPS (443)** from the appliance VM to Azure.  
+
+### ✅ Expected Result
+- Your discovered AWS Linux VM(s) appear under **Discovered servers** in the Azure Migrate project.  
+- This confirms the appliance has successfully synced inventory data into Azure.  
+- With discovered VMs visible, you can now proceed to **Step 7 — Create an Assessment**.
 
 ---
 
-## 7) Create and Review an Assessment (**target**)
+## Step 7 — Run an Assessment 
 
-1. In the project, go to **Assessments → + Create assessment**.  
-2. Select the discovered AWS VMs for the assessment.  
-3. Configure assessment settings:  
-   - **Target region:** `$TGT_LOCATION`  
-   - **Sizing:** **Performance-based** (recommended) or **As-on-prem**  
-   - **Pricing:** **Pay-as-you-go** (or **Azure Hybrid Benefit** if eligible)  
-4. Create the assessment and open it to review:  
-   - **Readiness** (green/yellow/red) with reasons.  
-   - **Recommended Azure VM SKUs** per machine.  
-   - **Cost estimates** for compute and storage.  
-5. Adjust settings and re-run if the SKUs/cost don’t align with your objectives.
+An assessment helps you determine the Azure readiness of your servers discovered from AWS. Assessments are always tied to a **group of servers**, even if you only plan to migrate a single VM.
+
+---
+
+### 7.1 Open the Assessment Wizard
+1. In the **Azure Portal**, go to **Azure Migrate → your project (`aws-migrate-target`)**.  
+2. Under **Azure Migrate: Discovery and assessment**, click **Assessments**.  
+3. Click **+ Create assessment**.
+
+---
+
+### 7.2 Configure Assessment Basics
+1. **Assessment type** → Select **Azure VM**.  
+2. **Discovery source** → Choose **Servers discovered from Azure Migrate appliance**.  
+3. **Assessment settings** → Click **Edit** if needed, and confirm:  
+   - **Sizing criteria** → *Performance-based* (recommended).  
+   - **Target location** → your target region (e.g. `Australia Southeast` or `$TGT_LOCATION`).  
+   - **Savings options (Compute)** → choose *3 years reserved* or *Pay-as-you-go* depending on your scenario.  
+   - **Azure Hybrid Benefit** → *No* for Linux VMs (only relevant for Windows).  
+   - **Include security cost estimates** → *Yes, with Microsoft Defender for Cloud* if you want to see those costs.  
+4. Click **Save** to lock in the settings.
+
+---
+
+### 7.3 Select Servers to Assess
+1. Under **Assessment name**, enter a descriptive name (e.g. `aws-linux-assessment`).  
+2. Under **Group**, select **Create new**.  
+   - Enter a **Group name** (e.g. `aws-linux-group`).  
+   - Groups are containers for one or more machines.  
+3. In the server list:  
+   - Appliance = `awsappkey001 (Physical or other)`  
+   - Check the box for your discovered Linux VM(s).  
+   - For this lab, select the single discovered Linux server.  
+
+---
+
+### 7.4 Review + Create
+1. Review all details:  
+   - Assessment name  
+   - Group name  
+   - Selected server(s)  
+   - Assessment settings (sizing, target region, pricing, hybrid benefit, defender costs)  
+2. Click **Create assessment**.
+
+---
+
+### ✅ Expected Result
+- A **group** (e.g. `aws-linux-group`) is created.  
+- An **assessment** (e.g. `aws-linux-assessment`) is created for that group.  
+- Add the discovered workload
+- In the portal, you can open the assessment to view:  
+  - **Azure readiness** (green/yellow/red) for each VM.  
+  - **Recommended Azure VM SKU** (size/series).  
+  - **Estimated monthly cost** (with/without savings options).  
+
+This assessment prepares you for the next stage: **Step 8 — Configure Replication**.
+
 
 ---
 
