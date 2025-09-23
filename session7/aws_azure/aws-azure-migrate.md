@@ -129,8 +129,7 @@ Set-Service TermService -StartupType Automatic
 Start-Service TermService
 
 # Enable RDP in registry
-Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" `
-  -Name "fDenyTSConnections" -Value 0
+Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
 
 # Enable firewall rules for RDP
 Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
@@ -138,11 +137,9 @@ Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
 ### (Optional) Add a scheduled task so RDP always starts after reboot:
 ```powershell
-$Action = New-ScheduledTaskAction -Execute "PowerShell.exe" `
-  -Argument "-Command 'Start-Service TermService; Set-Service TermService -StartupType Automatic'"
+$Action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-Command 'Start-Service TermService; Set-Service TermService -StartupType Automatic'"
 $Trigger = New-ScheduledTaskTrigger -AtStartup
 Register-ScheduledTask -Action $Action -Trigger $Trigger -TaskName "Ensure-RDP-Service" -RunLevel Highest -Force
-
 ```
 
 ---
@@ -160,7 +157,7 @@ Register-ScheduledTask -Action $Action -Trigger $Trigger -TaskName "Ensure-RDP-S
      ```
    - If `False`, start explicitly:  
      ```powershell
-     & "$env:WINDIR\System32\WindowsPowerShell1.0\powershell.exe"
+     & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
      ```
 3. **Prepare & run installer**:  
    ```powershell
@@ -209,7 +206,7 @@ Register-ScheduledTask -Action $Action -Trigger $Trigger -TaskName "Ensure-RDP-S
    - Continue past the certificate warning (self-signed).  
    - Paste the **Project Key** generated in Step 3.  
    - Click **Login** and sign in with your **Azure account** that has access to the project.  
-   - ensure the VM date aligns with your time zone (otherwise adjust date/time)
+   - Ensure the VM date/time is correct for your time zone.  
 2. Wait until the UI shows the appliance is **Registered**/**Connected** to your Azure Migrate project.  
 3. **If Azure sign-in fails** (common causes):  
    - Ensure the PowerShell/browser session is on the **VM** (not your local PC).  
@@ -220,18 +217,18 @@ Register-ScheduledTask -Action $Action -Trigger $Trigger -TaskName "Ensure-RDP-S
      taskkill /IM rdpclip.exe /F; Start-Process rdpclip.exe
      ```
 
-### 5.3) Configure Accessto AWS EC2 in the Appliance & Start Discovery
+### 5.3) Configure Access to AWS EC2 in the Appliance & Start Discovery
 
-1. In the Configuration Manager, select **Add Credentials**:  
-   - Select the type of EC2 you want to migrate
-   - Select the type of authentication on the EC2 (e.g. SSH, password)
+1. In the Configuration Manager, select **Add credentials**:  
+   - Choose the type of EC2 you want to migrate.  
+   - Choose the authentication type for the EC2 (e.g., SSH key, password).  
 2. In the Configuration Manager, select **Add discovery source**:  
-   - Select the EC2 type
-   - select the name associated with correc credentials from previous step
-   - EC2 must be running --> copy and paste the public IP of the EC2  
-3. Start Discovery
+   - Select the EC2 type.  
+   - Select the name associated with the correct credentials from the previous step.  
+   - Ensure the EC2 instance is **running** → copy and paste the **public IP** of the EC2.  
+3. **Start Discovery**.
 
-**Expected:** Within ~15–30 minutes,Discovery has been successfully initiated. Go to the Azure portal to review the discovered inventory. 
+**Expected:** Within ~15–30 minutes, discovery starts and data appears in the portal. Go to the Azure portal to review the discovered inventory. 
 
 ---
 
@@ -273,7 +270,7 @@ After initiating discovery from the appliance, the results flow into your Azure 
    - **Default environment** → **Production (Prod)** (ensures 24×7 cost model, matches EC2 behavior).  
    - **Currency** → AUD (or your subscription billing currency).  
    - **Program/offer** → EA subscription.  
-   - **Default savings option** → *Pay-as-you-go* (simplest for lab; use *3-year reserved* only if modeling cost savings).  
+   - **Default savings option** → *Pay-as-you-go*.  
    - **Discount (%)** → `0`.  
    - **Sizing criteria** → *Performance-based*.  
    - **Performance history** → `30 days`.  
@@ -302,14 +299,12 @@ After initiating discovery from the appliance, the results flow into your Azure 
 ### ✅ Expected Result
 - A **group** (e.g. `aws-linux-group`) is created.  
 - An **assessment** (e.g. `aws-linux-assessment`) is created for that group.  
-- Add the discovered workload
 - In the portal, you can open the assessment to view:  
   - **Azure readiness** (green/yellow/red) for each VM.  
   - **Recommended Azure VM SKU** (size/series).  
   - **Estimated monthly cost** (with/without savings options).  
 
 This assessment prepares you for the next stage: **Step 8 — Configure Replication**.
-
 
 ---
 
@@ -324,29 +319,28 @@ Replication relies on a **Recovery Services vault (ASR vault)**.
 If it doesn’t exist yet, create it through the **Discover** flow:
 
 1. In the Azure Portal, go to:  
-   **Azure Migrate → Migration and modernization → Discover**.
+   **Azure Migrate → Migration and modernization → Discover**.  
 2. **Scenario** → *Physical or other (AWS, GCP, Xen, etc.)*.  
 3. **Target region** → select your `$TGT_LOCATION`, then tick the confirmation box.  
 4. Click **Create resources**.  
-   - This bootstraps the Recovery Services vault (ASR) and links it to your migration project.
+   - This bootstraps the Recovery Services vault (ASR) and links it to your migration project.  
 5. Verify the vault:  
    - Portal → **Recovery Services vaults** → open the new vault.  
-   - Navigate to **Site Recovery Infrastructure → Configuration servers**.  
+   - Navigate to **Site Recovery infrastructure → ASR replication appliances**.  
    - Your registered appliance should appear here.  
    - If not, re-register the appliance with a fresh Project Key from **Discover**.
 
 ### B. Start Replication
 
 1. In the **Azure Portal**, open your project:  
-   **Azure Migrate → Migration and modernization → aws-migrate-target**.
-2. At the top of the blade, click **Replicate**.
-3. In the wizard, answer the initial questions:
-
+   **Azure Migrate → Migration and modernization → aws-migrate-target**.  
+2. At the top of the blade, click **Replicate**.  
+3. In the wizard, answer the initial questions:  
    - **What do you want to migrate?** → **Servers or virtual machines (VM)**  
    - **Where do you want to migrate to?** → **Azure VM**  
    - **Are your machines virtualized?** → **Physical or other (AWS, GCP, Xen, etc.)**  
    - **On-premises appliance** → Select your registered Azure Migrate **appliance**  
-     > ⚠️ *If the dropdown is empty, it means the appliance is not registered or the vault sync hasn’t completed. Go back to Step 5 and re-register the appliance with a fresh Project Key, then wait 15–30 minutes.*
+     > ⚠️ *If the dropdown is empty, it means the appliance is not registered or the vault sync hasn’t completed. Go back to Step 5 and re-register the appliance with a fresh Project Key, then wait 15–30 minutes.*  
 
 ### C. Target Settings
 - **Subscription** → your target subscription.  
