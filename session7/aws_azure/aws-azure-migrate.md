@@ -93,6 +93,7 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
 
 - **Choose AMI**
   - Select a supported Windows Server image:
+    - Name: **AWS-Appliance-VM**
     - Recommended: **Windows Server 2022 Datacenter (64-bit, x86)**.
     - If unavailable, you may see **Windows Server 2025**. While it may work, only 2016/2019/2022 are officially supported.
   - Example AMI ID (region-specific): `ami-09bbc01c23bd07334`.
@@ -141,6 +142,7 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
 ---
 
 ## 5) Set Up and Configure the Appliance
+
 - **Install the Appliance**
   - RDP into the Windows Server VM with admin rights.
   - Copy the downloaded `.zip` package into the VM.
@@ -162,6 +164,20 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
     ```powershell
     .\AzureMigrateInstaller.ps1
     ```
+  - ⚠️ If you see an error about `PowerShell-ISE` not found:
+    - Ignore it (ISE is deprecated).
+    - Manually install the missing IIS/WAS roles:
+      ```powershell
+      Install-WindowsFeature WAS, WAS-Process-Model, WAS-Config-APIs, Web-Server, Web-WebServer, Web-Mgmt-Service, Web-Request-Monitor, Web-Common-Http, Web-Static-Content, Web-Default-Doc, Web-Dir-Browsing, Web-Http-Errors, Web-App-Dev, Web-CGI, Web-Health, Web-Http-Logging, Web-Log-Libraries, Web-Security, Web-Filtering, Web-Performance, Web-Stat-Compression, Web-Mgmt-Tools, Web-Mgmt-Console, Web-Scripting-Tools, Web-Asp-Net45, Web-Net-Ext45, Web-Http-Redirect, Web-Windows-Auth, Web-Url-Auth
+      ```
+    - Verify installation:
+      ```powershell
+      Get-WindowsFeature | Where-Object {$_.InstallState -eq "Installed"} | Select-Object DisplayName, Name
+      ```
+    - Re-run the installer:
+      ```powershell
+      .\AzureMigrateInstaller.ps1
+      ```
   - Wait for the installer to complete. It installs prerequisites and appliance services.
   - Note the **Appliance Configuration Manager URL** (e.g., `https://<VMName>:44368`).
 
@@ -174,6 +190,12 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
     - Provide Linux guest OS credentials in the configuration manager, or
     - Install the **Dependency Agent** on your AWS VMs.
   - Start discovery.
+
+### ✅ Expected Result
+- The appliance VM is running in AWS.
+- In the Azure Portal, the appliance shows as **Connected** under *Discover*.
+- Within ~15–30 minutes, discovered AWS EC2 instances (Linux or Windows) appear in your project.
+
 
 ### ✅ Expected Result
 - The appliance VM is running in AWS.
