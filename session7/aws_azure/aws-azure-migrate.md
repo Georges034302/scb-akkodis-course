@@ -87,12 +87,63 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
 - **Key pair**: Select or create; keep `.pem` to decrypt `Administrator` password.  
 - **Network**: Public IP = **Enabled**; Subnet with Internet egress.  
 - **Security group**:  
-  - Inbound: **RDP 3389** (restrict to your IP).  
+  - Inbound: **RDP 3389** (restrict to your public IP).  
   - Inbound: **HTTPS 443** (0.0.0.0/0).  
   - Inbound: **HTTP 80** (optional).  
   - Outbound: **Allow all**.  
-- **Storage**: Root 80 GiB **gp3** SSD.  
-- **Launch** → Decrypt `Administrator` password → **RDP** into the VM.
+- **Storage**: Root 80 GiB **gp3** SSD.  
+- **Launch** → Decrypt `Administrator` password → **RDP** into the VM (once enabled).
+
+---
+
+### Add: Attach IAM Role for Session Manager Access (Recommended)
+
+1. **Create IAM Role**
+   - Go to **IAM → Roles → Create role**.  
+   - Trusted entity: **AWS service** → choose **EC2**.  
+   - Attach policy: **AmazonSSMManagedInstanceCore**.  
+   - Role name: `EC2-SSM-Role`.  
+
+2. **Attach Role to Your Instance**
+   - Go to **EC2 → Instances → Select your VM (`AWS-Appliance-VM`)**.  
+   - Choose **Actions → Security → Modify IAM role**.  
+   - Select **EC2-SSM-Role** → Save.  
+
+3. **Verify in Systems Manager**
+   - Go to **Systems Manager → Managed Instances**.  
+   - Your instance should appear as *Online* once the role is attached.  
+
+4. **Open Session Manager**
+   - In **EC2 → Instances**, select the VM → **Connect → Session Manager**.  
+   - This opens a PowerShell session inside the VM (no RDP needed).  
+
+---
+
+### Enable and Secure RDP from Session Manager
+
+Run these commands inside the Session Manager PowerShell session:
+
+```powershell
+# Ensure RDP service starts automatically
+Set-Service TermService -StartupType Automatic
+Start-Service TermService
+
+# Enable RDP in registry
+Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" `
+  -Name "fDenyTSConnections" -Value 0
+
+# Enable firewall rules for RDP
+Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+```
+
+### (Optional) Add a scheduled task so RDP always starts after reboot:
+```powershell
+$Action = New-ScheduledTaskAction -Execute "PowerShell.exe" `
+  -Argument "-Command 'Start-Service TermService; Set-Service TermService -StartupType Automatic'"
+$Trigger = New-ScheduledTaskTrigger -AtStartup
+Register-ScheduledTask -Action $Action -Trigger $Trigger -TaskName "Ensure-RDP-Service" -RunLevel Highest -Force
+
+```
 
 ---
 
