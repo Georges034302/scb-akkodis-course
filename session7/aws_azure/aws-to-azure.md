@@ -1,20 +1,22 @@
 # Lab 3‑A: AWS → Azure Migration (EC2 Export ➜ Azure Import via VHD)
 
 This lab exports an **AWS EC2** Linux web server (Apache HTTP Server) to a **VHD**, copies it to **Azure Blob Storage**, converts it to a **Page Blob**, creates a **Managed Disk**, and finally an **Azure VM**.  
-We follow the naming convention: AWS **source** artifacts end with **`-source`**; Azure **target** resources end with **`-target`**.
+
 
 <img width="1536" height="1024" alt="AWS-Azure--VHD-migration" src="https://github.com/user-attachments/assets/e0c666fd-15b8-4f9d-b6c6-e75297b1cdaa" />
-> Uses **password auth** (not SSH keys) and **`SUFFIX=$RANDOM`** to guarantee unique names.  
+
+> Uses **password auth** and **`SUFFIX=$RANDOM`** to guarantee unique names.  
 > The Azure side uses **`lab3-env.sh`** to prepare the target landing zone (**TGT_RG/TGT_VNET/TGT_SUBNET/TGT_NSG**) and to write `.lab.env` for sourcing.  
-> **NSG Web Rules:** `lab3-env.sh` (by default) adds inbound **SSH 22**, **HTTP 80**, and **HTTPS 443** via `CREATE_WEB_RULES=true`.
+> **NSG Web Rules:** `lab3-env.sh` adds inbound **SSH 22**, **HTTP 80**, and **HTTPS 443** via `CREATE_WEB_RULES=true`.
 
 ---
 
 ## 🎯 Objectives
 - Export an **EC2** AMI to **VHD** in **S3** (**-source** naming).  
 - Copy that **VHD** to **Azure Blob Storage** (server‑side copy).  
+- Identify the incompatibility EC2 AMI <--> Azure VM (Object blob <--> Page Blob)
 - Convert to **Page Blob**, create a **Managed Disk** and **VM** (**-target** naming).  
-- Validate via **SSH** and **HTTP/HTTPS**.
+- Validate via that the migrated AWS EC2 --> Azure VM is running
 
 ---
 
@@ -22,7 +24,6 @@ We follow the naming convention: AWS **source** artifacts end with **`-source`**
 - **AWS CLI** authenticated (AMI/S3/export permissions).
 - **Azure CLI** authenticated (subscription access).
 - **You ran** `lab3-env.sh` to prepare target networking/NSG **and** wrote `.lab.env`.
-- Network egress to **22/80/443** from your client IP.
 - AWS **`vmimport`** role set up (script provided below).
 
 ---
