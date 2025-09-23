@@ -178,83 +178,145 @@ az storage container create \
 
 ---
 
-## 8) Server‑side copy: S3 ➜ Azure (target)
-
-### Pull VHD from the **presigned S3 URL** into a **block blob** in Azure first.
+## 8) Server-side copy: S3 ➜ Azure (to a Block Blob first)
 
 ```bash
+export SA_NAME="migratevhdstore${SUFFIX}tgt"
 export CONTAINER="vhds"
-export DST_BLOCK_BLOB="imported-${SUFFIX}.vhd"   # block blob first
+export DST_BLOCK_BLOB="imported-${SUFFIX}.vhd"
 
+# Copy from the presigned S3 URL into Azure Blob Storage (Block Blob)
 az storage blob copy start \
   --account-name "$SA_NAME" \
   --destination-container "$CONTAINER" \
   --destination-blob "$DST_BLOCK_BLOB" \
   --source-uri "$SRC_S3_URL" \
   --auth-mode login
-```
 
-#### Monitor until completed:
-```bash
+# Monitor copy status until it reaches 'success'
 az storage blob show \
   --account-name "$SA_NAME" \
-  -c "$CONTAINER" -n "$DST_BLOCK_BLOB" \
+  --container-name "$CONTAINER" \
+  --name "$DST_BLOCK_BLOB" \
   --auth-mode login \
   --query "properties.copy | {Status:status, Progress:progress, CompletionTime:completionTime}" \
   -o table
 ```
 
-> If you see `AuthorizationPermissionMismatch`, wait a minute for RBAC or re‑assign the role above.
-
 ---
 
-## 9) Convert **Block Blob** ➜ **Page Blob** (**required for Managed Disk**)
-
-> Managed disks can only be created from **Page Blobs** and sizes must be **512‑byte aligned**.
+## 9) Block Blob ➜ Page Blob with AzCopy (server-side)
 
 ```bash
-# Choose final page blob name
+# Final Page Blob name
 export DST_PAGE_BLOB="imported-${SUFFIX}-page.vhd"
 
-# 1) Get size of the block blob and round up to 512-byte boundary
-SIZE=$(az storage blob show \
-  --account-name "$SA_NAME" -c "$CONTAINER" -n "$DST_BLOCK_BLOB" \
-  --auth-mode login --query "properties.contentLength" --output text)
-PAGE_SIZE=$(( ((SIZE + 511) / 512) * 512 ))
-echo "Block=$SIZE  PageAligned=$PAGE_SIZE"
-
-# 2) Create an empty Page Blob of that size
-az storage blob create \
-  --account-name "$SA_NAME" -c "$CONTAINER" -n "$DST_PAGE_BLOB" \
-  --type page --size "$PAGE_SIZE" --auth-mode login
-
-# 3) Make a short SAS to read the source block blob
+# Short-lived SAS (read on source blob; create+write on destination container)
 EXPIRY=$(date -u -d "+2 hours" '+%Y-%m-%dT%H:%MZ')
+
 SRC_SAS=$(az storage blob generate-sas \
-  --account-name "$SA_NAME" -c "$CONTAINER" -n "$DST_BLOCK_BLOB" \
-  --permissions r --expiry "$EXPIRY" --https-only \
-  --auth-mode login --output tsv)
-SRC_URL="https://${SA_NAME}.blob.core.windows.net/${CONTAINER}/${DST_BLOCK_BLOB}?${SRC_SAS}"
-
-# 4) Copy into the Page Blob (server-side)
-az storage blob copy start \
   --account-name "$SA_NAME" \
-  --destination-container "$CONTAINER" \
-  --destination-blob "$DST_PAGE_BLOB" \
-  --source-uri "$SRC_URL" \
-  --auth-mode login
+  --container-name "$CONTAINER" \
+  --name "$DST_BLOCK_BLOB" \
+  --permissions r \
+  --expiry "$EXPIRY" \
+  --https-only \
+  --auth-mode login \
+  --as-user -o tsv)
 
-# 5) Watch until Status=success
+DST_SAS=$(az storage container generate-sas \
+  --account-name "$SA_NAME" \
+  --name "$CONTAINER" \
+  --permissions cw \
+  --expiry "$EXPIRY" \
+  --https-only \
+  --auth-mode login \
+  --as-user -o tsv)
+
+SRC_URL="https://${SA_NAME}.blob.core.windows.net/${CONTAINER}/${DST_BLOCK_BLOB}?${SRC_SAS}"
+DST_URL="https://${SA_NAME}.blob.core.windows.net/${CONTAINER}/${DST_PAGE_BLOB}?${DST_SAS}"
+
+# 9.1) Server-side copy Block ➜ Page (no local hops)
+azcopy copy "$SRC_URL" "$DST_URL" --blob-type PageBlob --overwrite=true
+
+# 9.2) Verify PageBlob + size alignment
 az storage blob show \
-  --account-name "$SA_NAME" -c "$CONTAINER" -n "$DST_PAGE_BLOB" \
-  --auth-mode login --query "properties.copy" -o table
+  --account-name "$SA_NAME" \
+  --container-name "$CONTAINER" \
+  --name "$DST_PAGE_BLOB" \
+  --query "[properties.blobType, properties.contentLength]" -o tsv
+
+SIZE=$(az storage blob show --account-name "$SA_NAME" -c "$CONTAINER" -n "$DST_PAGE_BLOB" --query "properties.contentLength" -o tsv)
+echo "MiB mod: $(( SIZE % 1048576 ))  ;  512B mod: $(( SIZE % 512 ))"
+
+# 9.3) Download the Page Blob locally to inspect VHD type
+PAGE_READ_SAS=$(az storage blob generate-sas \
+  --account-name "$SA_NAME" \
+  --container-name "$CONTAINER" \
+  --name "$DST_PAGE_BLOB" \
+  --permissions r \
+  --expiry "$EXPIRY" \
+  --https-only \
+  --auth-mode login \
+  --as-user -o tsv)
+
+PAGE_READ_URL="https://${SA_NAME}.blob.core.windows.net/${CONTAINER}/${DST_PAGE_BLOB}?${PAGE_READ_SAS}"
+
+azcopy copy "$PAGE_READ_URL" "./check.vhd" --overwrite=true
+
+# 9.4) If Dynamic or not whole-MiB, convert → fixed (integer-MiB) and re-upload
+NEEDS_FIX=0
+qemu-img info ./check.vhd | grep -qi "subformat: dynamic" && NEEDS_FIX=1
+
+# Also treat non-integer MiB virtual size as needing fix
+VIRT_BYTES=$(qemu-img info --output=json ./check.vhd | jq -r '.["virtual-size"]')
+[ $(( VIRT_BYTES % 1048576 )) -ne 0 ] && NEEDS_FIX=1
+
+if [ "$NEEDS_FIX" -eq 1 ]; then
+  echo "Fixing VHD (dynamic or not MiB-aligned) ..."
+  # vpc(dynamic) -> raw
+  qemu-img convert -p -f vpc -O raw ./check.vhd ./tmp.raw
+  # round UP to whole MiB
+  BYTES=$(stat -c%s ./tmp.raw)
+  MIB=$(( (BYTES + 1048576 - 1) / 1048576 ))
+  qemu-img resize -f raw ./tmp.raw "${MIB}M"
+  # raw -> vpc(fixed) with correct footer
+  qemu-img convert -p -f raw -O vpc -o subformat=fixed,force_size ./tmp.raw ./fixed.vhd
+  rm -f ./tmp.raw
+
+  # sanity: must be vpc; bytes % 1MiB == 0
+  qemu-img info ./fixed.vhd
+  FIX_BYTES=$(stat -c%s ./fixed.vhd)
+  echo "Fixed MiB mod: $(( FIX_BYTES % 1048576 ))"
+
+  # re-upload fixed file over the Page Blob
+  azcopy copy "./fixed.vhd" "$DST_URL" --blob-type PageBlob --overwrite=true
+  rm -f ./fixed.vhd
+else
+  echo "VHD is already fixed & MiB-aligned."
+fi
+
+# 9.5) Clean local temp
+rm -f ./check.vhd
+
+# 9.6) Final re-check in Azure
+az storage blob show \
+  --account-name "$SA_NAME" \
+  --container-name "$CONTAINER" \
+  --name "$DST_PAGE_BLOB" \
+  --query "[properties.blobType, properties.contentLength]" -o tsv
+
+SIZE=$(az storage blob show --account-name "$SA_NAME" -c "$CONTAINER" -n "$DST_PAGE_BLOB" --query "properties.contentLength" -o tsv)
+echo "FINAL MiB mod: $(( SIZE % 1048576 ))  ;  FINAL 512B mod: $(( SIZE % 512 ))"
+
 ```
 
 ---
 
-## 10) Create a Managed Disk from the Page Blob (**target**)
+## 10) Create a Managed Disk from the Page Blob
 
 ```bash
+# Paste the literal URL to avoid any env injecting :8443
 az disk create \
   --resource-group "$TGT_RG" \
   --location "$TGT_LOCATION" \
@@ -265,7 +327,7 @@ az disk create \
 
 ---
 
-## 11) Create the migrated VM (**target**, password auth)
+## 11) Create the migrated VM (**target**)
 
 ```bash
 read -s -p "Enter a secure password for the migrated VM admin user: " ADMIN_PASSWORD && echo
@@ -277,42 +339,23 @@ az vm create \
   --attach-os-disk "aws-imported-disk-${SUFFIX}-target" \
   --os-type Linux \
   --size Standard_B1s \
-  --admin-username azureuser \
-  --admin-password "$ADMIN_PASSWORD" \
-  --authentication-type password \
   --vnet-name "$TGT_VNET" \
   --subnet "$TGT_SUBNET" \
   --nsg "$TGT_NSG"
 ```
 
-> If your NSG is associated at the **subnet**, the VM‑level `--nsg` is ignored. `lab3-env.sh` already attached NSG to the subnet with 22/80/443 allowed (by default).
-
 ---
 
-## 12) Validate (SSH + Web)
+## 12) Validate that the AWS EC2 migrated VM is Running in Azure
 
 ```bash
-# Environment health
-./lab3-env.sh status
-
-# Public IP
-PUBLIC_IP=$(az vm show -d \
+az vm show \
   --resource-group "$TGT_RG" \
   --name "aws-migrated-vm-${SUFFIX}-target" \
-  --query publicIps --output text)
-echo "Public IP: $PUBLIC_IP"
-
-# SSH
-ssh -o StrictHostKeyChecking=no azureuser@"$PUBLIC_IP" hostname
-
-# Web (Apache)
-curl -I "http://$PUBLIC_IP"
-# Optional:
-curl -Ik "https://$PUBLIC_IP"
+  --query "[name, provisioningState, powerState]" \
+  --show-details \
+  -o table
 ```
-
-Open your browser to `http://$PUBLIC_IP` (and `https://$PUBLIC_IP` if configured).
-
 ---
 
 ## 13) Cleanup (optional)
@@ -325,7 +368,7 @@ Open your browser to `http://$PUBLIC_IP` (and `https://$PUBLIC_IP` if configured
 az storage account delete \
   --name "$SA_NAME" \
   --resource-group "$TGT_RG" \
-  --yes --no-wait
+  --yes
 ```
 
 In AWS, optionally delete the S3 export bucket and the AMI.

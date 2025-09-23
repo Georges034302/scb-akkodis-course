@@ -10,3 +10,4 @@
 .env.*.staging
 .env.*.development
 .env.*.local
+azcopy_linux_amd64*
