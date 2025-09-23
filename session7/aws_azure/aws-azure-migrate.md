@@ -109,7 +109,7 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
      ```
    - If `False`, start explicitly:  
      ```powershell
-     & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
+     & "$env:WINDIR\System32\WindowsPowerShell1.0\powershell.exe"
      ```
 3. **Prepare & run installer**:  
    ```powershell
@@ -151,6 +151,7 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
    # If time/clock skew causes Azure sign-in issues, sync time:
    w32tm /resync
    ```
+
 ### 5.2) Register the Appliance with the Azure Migrate Project
 
 1. In the **Appliance Configuration Manager** (the URL from step 5.1):  
@@ -167,6 +168,7 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
      ```powershell
      taskkill /IM rdpclip.exe /F; Start-Process rdpclip.exe
      ```
+
 ### 5.3) Configure Accessto AWS EC2 in the Appliance & Start Discovery
 
 1. In the Configuration Manager, select **Add Credentials**:  
