@@ -313,23 +313,41 @@ This assessment prepares you for the next stage: **Step 8 — Configure Replicat
 
 ---
 
-## 8) Configure Replication (**source → target**)
+## 8) Configure Replication (source → target)
 
-1. In **Azure Migrate → Replicate**, select the AWS VMs to migrate.  
-2. **Target settings:**  
-   - **Subscription**: your target subscription  
-   - **Resource group**: `$TGT_RG`  
-   - **Virtual network / Subnet**: `$TGT_VNET` / `$TGT_SUBNET`  
-   - **Network security group**: `$TGT_NSG`  
-3. **Compute & storage details:**  
-   - **Target VM size**: accept recommendation or override.  
-   - **Availability options**: None / Zone / Availability Set.  
-   - **OS & data disks**: choose disk types (Premium/Standard).  
-   - **Public IP**: enable if you plan to validate via SSH/RDP/HTTP directly.  
-   - **Licensing**: enable Azure Hybrid Benefit if you’re eligible.  
-4. Start replication and monitor **Jobs** and **Replicated items** for progress.  
+### A. In the Azure Portal
 
-**Tip:** If a machine has large disks, initial sync can take time. Ensure appliance stays powered and connected.
+1. **Open Azure Migrate Project**
+   - Go to the Azure Portal.
+   - Navigate to your project:  
+     **Azure Migrate → Migration and modernization → aws-migrate-target**.
+
+2. **Start Replication**
+   - In the **Migration and modernization** blade, click **Replicate**.
+
+3. **Source Settings**
+   - **Are your machines virtualized?** → Select **Physical or other (AWS, GCP, Xen, etc.)**.
+   - **Select machines to replicate** → Choose the AWS VM(s) you discovered and want to migrate.
+
+4. **Target Settings**
+   - **Subscription** → your target subscription.
+   - **Resource group** → `$TGT_RG`.
+   - **Virtual network** → `$TGT_VNET`.
+   - **Subnet** → `$TGT_SUBNET`.
+   - **Network security group** → `$TGT_NSG`.
+
+5. **Compute and Storage**
+   - **Target VM size** → accept the recommended size or select manually.
+   - **Availability options** → None, Availability Zone, or Availability Set.
+   - **OS and data disks** → choose disk types (Premium/Standard).
+   - **Public IP** → enable if you want SSH/RDP/HTTP access post-migration.
+   - **Licensing** → enable Azure Hybrid Benefit if eligible.
+
+6. **Review and Start Replication**
+   - Review all settings carefully.
+   - Click **Replicate** to begin the replication process.
+
+📌 **Note**: Initial replication can take time for large disks. Keep the **appliance VM running and connected** until the sync completes.
 
 ---
 
