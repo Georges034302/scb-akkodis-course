@@ -162,6 +162,7 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
    - Continue past the certificate warning (self-signed).  
    - Paste the **Project Key** generated in Step 3.  
    - Click **Login** and sign in with your **Azure account** that has access to the project.  
+   - ensure the VM date aligns with your time zone (otherwise adjust date/time)
 2. Wait until the UI shows the appliance is **Registered**/**Connected** to your Azure Migrate project.  
 3. **If Azure sign-in fails** (common causes):  
    - Ensure the PowerShell/browser session is on the **VM** (not your local PC).  
