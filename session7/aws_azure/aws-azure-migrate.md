@@ -144,58 +144,79 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
 ## 5) Set Up and Configure the Appliance
 
 ### 5.1) Install the Appliance
-  - RDP into the Windows Server VM with admin rights.
-  - Copy the downloaded `.zip` package into the VM.
-  - Extract the `.zip` file to a local folder (e.g., `C:\AzureMigrateAppliance\`).
-  - Open **Windows PowerShell as Administrator**.
-  - Navigate to the extracted folder:
-    ```powershell
-    cd "C:\AzureMigrateAppliance\"
-    ```
-  - (Optional) Unblock downloaded files:
-    ```powershell
-    Get-ChildItem -Recurse | Unblock-File
-    ```
-  - (If blocked by execution policy) allow script execution temporarily:
-    ```powershell
-    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-    ```
-  - Run the installer script:
-    ```powershell
-    .\AzureMigrateInstaller.ps1
-    ```
-  - ⚠️ If you see an error about `PowerShell-ISE` not found:
-    - Ignore it (ISE is deprecated).
-    - Manually install the missing IIS/WAS roles:
-      ```powershell
-      Install-WindowsFeature WAS, WAS-Process-Model, WAS-Config-APIs, Web-Server, Web-WebServer, Web-Mgmt-Service, Web-Request-Monitor, Web-Common-Http, Web-Static-Content, Web-Default-Doc, Web-Dir-Browsing, Web-Http-Errors, Web-App-Dev, Web-CGI, Web-Health, Web-Http-Logging, Web-Log-Libraries, Web-Security, Web-Filtering, Web-Performance, Web-Stat-Compression, Web-Mgmt-Tools, Web-Mgmt-Console, Web-Scripting-Tools, Web-Asp-Net45, Web-Net-Ext45, Web-Http-Redirect, Web-Windows-Auth, Web-Url-Auth
-      ```
-    - Verify installation:
-      ```powershell
-      Get-WindowsFeature | Where-Object {$_.InstallState -eq "Installed"} | Select-Object DisplayName, Name
-      ```
-    - Re-run the installer:
-      ```powershell
-      .\AzureMigrateInstaller.ps1
-      ```
-  - Wait for the installer to complete. It installs prerequisites and appliance services.
-  - Note the **Appliance Configuration Manager URL** (e.g., `https://<VMName>:44368`).
+- RDP into the Windows Server VM with admin rights.
+- Copy the downloaded `.zip` package into the VM.
+- Extract the `.zip` file to a local folder (e.g., `C:\AzureMigrateAppliance\`).
+- Open **Windows PowerShell as Administrator**.
+- Navigate to the extracted folder:
+  ```powershell
+  cd "C:\AzureMigrateAppliance"
+  ```
+- (Optional) Unblock downloaded files:
+  ```powershell
+  Get-ChildItem -Recurse | Unblock-File
+  ```
+- (If blocked by execution policy) allow script execution temporarily:
+  ```powershell
+  Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+  ```
+- Run the installer script:
+  ```powershell
+  .\AzureMigrateInstaller.ps1
+  ```
+
+#### ⚠️ Known Issue: `PowerShell-ISE` Not Found (Windows Server 2022/2025)
+- You may see:
+  ```
+  Install-WindowsFeature : ArgumentNotValid: The role, role service, or feature name is not valid: 'PowerShell-ISE'.
+  ```
+- **Reason:** PowerShell ISE is deprecated and not required.  
+- **Fix A — Manually install required IIS/WAS roles (excluding ISE):**
+  ```powershell
+  Install-WindowsFeature WAS, WAS-Process-Model, WAS-Config-APIs, `
+    Web-Server, Web-WebServer, Web-Mgmt-Service, Web-Request-Monitor, `
+    Web-Common-Http, Web-Static-Content, Web-Default-Doc, Web-Dir-Browsing, Web-Http-Errors, `
+    Web-App-Dev, Web-CGI, `
+    Web-Health, Web-Http-Logging, Web-Log-Libraries, `
+    Web-Security, Web-Filtering, `
+    Web-Performance, Web-Stat-Compression, `
+    Web-Mgmt-Tools, Web-Mgmt-Console, Web-Scripting-Tools, `
+    Web-Asp-Net45, Web-Net-Ext45, `
+    Web-Http-Redirect, Web-Windows-Auth, Web-Url-Auth
+  ```
+  (Optional) Verify installed roles:
+  ```powershell
+  Get-WindowsFeature | Where-Object {$_.InstallState -eq "Installed"} | Select-Object DisplayName, Name
+  ```
+  Re-run the installer:
+  ```powershell
+  .\AzureMigrateInstaller.ps1
+  ```
+- **Fix B — If the script still tries to add ISE, remove it from the script:**
+  ```powershell
+  # Backup the installer
+  Copy-Item .\AzureMigrateInstaller.ps1 .\AzureMigrateInstaller.ps1.bak
+
+  # Remove 'PowerShell-ISE' from Install-WindowsFeature lines
+  (Get-Content .\AzureMigrateInstaller.ps1) `
+    -replace 'PowerShell-ISE,?\s*', '' `
+    | Set-Content .\AzureMigrateInstaller.ps1
+
+  # Run again
+  .\AzureMigrateInstaller.ps1
+  ```
+
+- Once resolved, the installer completes, installs prerequisites, and shows the **Appliance Configuration Manager URL** (e.g., `https://<VMName>:44368`).
 
 ### 5.2) Configure and Start Discovery
-  - Open the **Appliance Configuration Manager** in a browser on the VM using the provided URL.
-  - Paste the **Project Key** you generated earlier.
-  - Sign in with your **Azure account** to register the appliance with the project.
-  - Provide **AWS IAM credentials** (user or role) so the appliance can query AWS APIs.
-  - *(Optional)* For **dependency mapping**:
-    - Provide Linux guest OS credentials in the configuration manager, or
-    - Install the **Dependency Agent** on your AWS VMs.
-  - Start discovery.
-
-### ✅ Expected Result
-- The appliance VM is running in AWS.
-- In the Azure Portal, the appliance shows as **Connected** under *Discover*.
-- Within ~15–30 minutes, discovered AWS EC2 instances (Linux or Windows) appear in your project.
-
+- Open the **Appliance Configuration Manager** in a browser on the VM using the provided URL.
+- Paste the **Project Key** you generated earlier.
+- Sign in with your **Azure account** to register the appliance with the project.
+- Provide **AWS IAM credentials** (user or role) so the appliance can query AWS APIs.
+- *(Optional)* For **dependency mapping**:
+  - Provide Linux/Windows guest OS credentials in the configuration manager, or
+  - Install the **Dependency Agent** on your AWS VMs.
+- Start discovery.
 
 ### ✅ Expected Result
 - The appliance VM is running in AWS.
