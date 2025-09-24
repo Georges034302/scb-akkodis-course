@@ -131,26 +131,31 @@ If it doesn’t exist yet, create it through the **Discover** flow:
 
 ## 5) Set Up and Configure the Appliance
 
-### 5.1) Install the Appliance (Windows VM)
+### 5.1 Install the Appliance (Windows VM)
 
-1. **Copy & extract** the Azure Migrate appliance `.zip` to `C:\AzureMigrateAppliance`.  
-2. **Open 64-bit PowerShell as Administrator**:  
+1. **Copy & Extract**  
+   - Copy the Azure Migrate appliance `.zip` file to the VM.  
+   - Extract it to: `C:\AzureMigrateAppliance`.  
+
+2. **Open 64-bit PowerShell as Administrator**  
    - Start → Windows PowerShell → **Run as administrator**.  
-   - Verify:  
+   - Verify you are running 64-bit PowerShell:  
      ```powershell
      [Environment]::Is64BitProcess   # must return True
      ```
-   - If `False`, start explicitly:  
+   - If it returns `False`, explicitly start 64-bit PowerShell:  
      ```powershell
      & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
      ```
-3. **Prepare & run installer**:  
+
+3. **Prepare & Run Installer**  
    ```powershell
    Set-Location "C:\AzureMigrateAppliance"
    Set-ExecutionPolicy -Scope Process Bypass -Force
    Get-ChildItem -Recurse | Unblock-File
    .\AzureMigrateInstaller.ps1
    ```
+
 4. **If you hit the deprecated PowerShell ISE feature error** on Windows Server 2022/2025:  
    - Run installer prerequisites **without** ISE and re-run:  
      ```powershell
@@ -172,7 +177,7 @@ If it doesn’t exist yet, create it through the **Discover** flow:
      (Get-Content .\AzureMigrateInstaller.ps1) -replace 'PowerShell-ISE,?\s*', '' | Set-Content .\AzureMigrateInstaller.ps1
      .\AzureMigrateInstaller.ps1
      ```
-5. **Confirm the configuration UI is reachable** (the installer prints a URL like `https://<VMName>:44368`):  
+5. **Confirm the configuration UI is reachable** (Using URL like `https://<VMName>:44368`):  
    ```powershell
    $u = "https://$env:COMPUTERNAME:44368"
    Test-NetConnection -ComputerName $env:COMPUTERNAME -Port 44368   # should be TcpTestSucceeded = True
