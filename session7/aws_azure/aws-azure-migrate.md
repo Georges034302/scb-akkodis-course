@@ -85,7 +85,9 @@ If it doesn’t exist yet, create it through the **Discover** flow:
 
 ---
 
-## 4) Create the Appliance VM in AWS EC2
+## 4) Create the Appliance VM in AWS EC2 and Connect using RDP
+
+### A. Create the Windows AWS Appliance VM
 
 - **Launch instance** → Name: `AWS-Appliance-VM`.  
 - **AMI**: Windows Server **2022 Datacenter (64-bit)** (2016/2019/2022 are supported).  
@@ -100,28 +102,30 @@ If it doesn’t exist yet, create it through the **Discover** flow:
 - **Storage**: Root 80 GiB **gp3** SSD.  
 - **Launch** → Decrypt `Administrator` password → **RDP** into the VM (once enabled).
 
----
+### Connect to the AWS Appliance VM via RDP
 
-### Add: Attach IAM Role for Session Manager Access (If RDP service does not load on VM start up)
+1. **Wait for the Instance to Initialize**  
+   - In the **AWS EC2 Console**, check that your `AWS-Appliance-VM` instance status is **Running** and both health checks pass.  
 
-1. **Create IAM Role**
-   - Go to **IAM → Roles → Create role**.  
-   - Trusted entity: **AWS service** → choose **EC2**.  
-   - Attach policy: **AmazonSSMManagedInstanceCore**.  
-   - Role name: `EC2-SSM-Role`.  
+2. **Retrieve Administrator Password**  
+   - Select your instance → **Connect** → **RDP client** tab.  
+   - Click **Get password**.  
+   - Upload the `.pem` key pair file you created/selected during instance launch.  
+   - Decrypt to reveal the **Administrator** password.  
 
-2. **Attach Role to Your Instance**
-   - Go to **EC2 → Instances → Select your VM (`AWS-Appliance-VM`)**.  
-   - Choose **Actions → Security → Modify IAM role**.  
-   - Select **EC2-SSM-Role** → Save.  
+3. **Download RDP File**  
+   - In the same **RDP client** tab, click **Download Remote Desktop File**.  
+   - This `.rdp` file will contain the instance’s public IP.  
 
-3. **Verify in Systems Manager**
-   - Go to **Systems Manager → Managed Instances**.  
-   - Your instance should appear as *Online* once the role is attached.  
+4. **Open RDP Session**  
+   - Double-click the `.rdp` file.  
+   - When prompted, enter:  
+     - **Username**: `Administrator`  
+     - **Password**: (the decrypted value from step 2).  
 
-4. **Open Session Manager**
-   - In **EC2 → Instances**, select the VM → **Connect → Session Manager**.  
-   - This opens a PowerShell session inside the VM (no RDP needed).  
+5. **Verify Access**  
+   - You should see the Windows Server desktop of your AWS Appliance VM.  
+   - If connection fails, ensure your **security group inbound rule for RDP (3389)** is restricted to your current public IP and that outbound Internet is enabled.  
 
 ---
 
