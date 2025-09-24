@@ -44,19 +44,44 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
 
 ---
 
-## 2) Provision an Azure Migrate Project (**target**)
+## 3) Prepare for Discovery & Replication
 
-1. In the **Azure Portal**, search for **Azure Migrate**.  
-2. Click **Servers, databases and web apps**.  
-3. Create a project:  
-   - **Subscription**: Azure subscription 1  
-   - **Resource group**: `rg-migrate-target`  
-   - **Project name**: `aws-migrate-target`  
-   - **Geography**: Australia  
-   - **Connectivity method**: Public endpoint  
-4. Click **Create**.
+### A. Generate Project Key & Download Appliance Package
 
-> `lab3-env.sh` can also create the project, but the **Portal** flow is recommended for clarity.
+1. In the **Azure Portal**, open **Azure Migrate → aws-migration-target**.  
+2. Under **Migration tools → Migration and modernization**, click **Discover**.  
+3. Select **Using appliance**.  
+4. For **Are your servers virtualized?**, choose **Physical or other (AWS, GCP, Xen, etc.)**.  
+5. **Generate Project Key**:  
+   - Enter an appliance name (e.g., `awsappkey001`).  
+   - Click **Generate key** and wait for the operation to finish.  
+   - Copy the **Project Key** (used later to register the appliance).  
+6. **Download the Appliance Package**:  
+   - Download the `.zip` package (~500 MB).  
+   - This contains **AzureMigrateInstaller.ps1**.  
+   - Copy it to the Windows Server VM in AWS (created in Step 4).  
+
+---
+
+### B. Prepare Recovery Services Vault (ASR)
+
+Replication relies on a **Recovery Services vault (ASR vault)**.  
+If it doesn’t exist yet, create it through the **Discover** flow:
+
+1. In the Azure Portal, go to:  
+   **Azure Migrate → Migration and modernization → Discover**.  
+2. **Scenario** → *Physical or other (AWS, GCP, Xen, etc.)*.  
+3. **Target region** → select your `$TGT_LOCATION`, then tick the confirmation box.  
+4. Click **Create resources**.  
+   - This bootstraps the Recovery Services vault (ASR) and links it to your migration project.  
+5. Verify the vault:  
+   - Portal → **Recovery Services vaults** → open the new vault.  
+   - Navigate to **Site Recovery infrastructure → ASR replication appliances**.  
+   - Your registered appliance will appear here *after Step 5 registration*.  
+
+---
+
+✅ With the **Project Key**, **Appliance package**, and **ASR Vault** ready, you can now move to Step 4: creating the Appliance VM in AWS.
 
 ---
 
@@ -313,24 +338,7 @@ This assessment prepares you for the next stage: **Step 8 — Configure Replicat
 The first step for migration is to **replicate a server or web app**.  
 Once replication completes, you can perform a **test migration** before finally migrating to your desired target service.
 
-### A. Prepare Recovery Services Vault (ASR)
-
-Replication relies on a **Recovery Services vault (ASR vault)**.  
-If it doesn’t exist yet, create it through the **Discover** flow:
-
-1. In the Azure Portal, go to:  
-   **Azure Migrate → Migration and modernization → Discover**.  
-2. **Scenario** → *Physical or other (AWS, GCP, Xen, etc.)*.  
-3. **Target region** → select your `$TGT_LOCATION`, then tick the confirmation box.  
-4. Click **Create resources**.  
-   - This bootstraps the Recovery Services vault (ASR) and links it to your migration project.  
-5. Verify the vault:  
-   - Portal → **Recovery Services vaults** → open the new vault.  
-   - Navigate to **Site Recovery infrastructure → ASR replication appliances**.  
-   - Your registered appliance should appear here.  
-   - If not, re-register the appliance with a fresh Project Key from **Discover**.
-
-### B. Start Replication
+### A. Start Replication
 
 1. In the **Azure Portal**, open your project:  
    **Azure Migrate → Migration and modernization → aws-migrate-target**.  
@@ -342,21 +350,21 @@ If it doesn’t exist yet, create it through the **Discover** flow:
    - **On-premises appliance** → Select your registered Azure Migrate **appliance**  
      > ⚠️ *If the dropdown is empty, it means the appliance is not registered or the vault sync hasn’t completed. Go back to Step 5 and re-register the appliance with a fresh Project Key, then wait 15–30 minutes.*  
 
-### C. Target Settings
+### B. Target Settings
 - **Subscription** → your target subscription.  
 - **Resource group** → `$TGT_RG`.  
 - **Virtual network** → `$TGT_VNET`.  
 - **Subnet** → `$TGT_SUBNET`.  
 - **Network security group** → `$TGT_NSG`.  
 
-### D. Compute and Storage
+### C. Compute and Storage
 - **Target VM size** → accept the recommended size or select manually.  
 - **Availability options** → None, Availability Zone, or Availability Set.  
 - **OS and data disks** → choose disk types (Premium/Standard).  
 - **Public IP** → enable if you want SSH/RDP/HTTP access post-migration.  
 - **Licensing** → enable Azure Hybrid Benefit if eligible.  
 
-### E. Review and Start Replication
+### D. Review and Start Replication
 - Review all settings carefully.  
 - Click **Replicate** to begin the replication process.  
 
