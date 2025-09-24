@@ -49,7 +49,7 @@ echo "TGT_RG=$TGT_RG TGT_VNET=$TGT_VNET TGT_SUBNET=$TGT_SUBNET TGT_NSG=$TGT_NSG 
 ### A. Generate Project Key & Download Appliance Package
 
 1. In the **Azure Portal**, open **Azure Migrate → aws-migration-target**.  
-2. Under **Migration tools → Migration and modernization**, click **Discover**.  
+2. Under **Migration tools → Azure Migrate: Discovery and assessment**, click **Discover**.  
 3. Select **Using appliance**.  
 4. For **Are your servers virtualized?**, choose **Physical or other (AWS, GCP, Xen, etc.)**.  
 5. **Generate Project Key**:  
