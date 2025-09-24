@@ -148,7 +148,20 @@ If it doesn’t exist yet, create it through the **Discover** flow:
      & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
      ```
 
-3. **Prepare & Run Installer**  
+3. **Install Required Windows Features**  
+   > On Windows Server 2022/2025, run the following to install IIS, WAS, .NET, and other dependencies (PowerShell ISE is no longer supported): 
+
+   ```powershell
+   Install-WindowsFeature WAS, WAS-Process-Model, WAS-Config-APIs, `
+     Web-Server, Web-WebServer, Web-Mgmt-Service, Web-Request-Monitor, `
+     Web-Common-Http, Web-Static-Content, Web-Default-Doc, Web-Dir-Browsing, Web-Http-Errors, `
+     Web-App-Dev, Web-CGI, Web-Health, Web-Http-Logging, Web-Log-Libraries, `
+     Web-Security, Web-Filtering, Web-Performance, Web-Stat-Compression, `
+     Web-Mgmt-Tools, Web-Mgmt-Console, Web-Scripting-Tools, `
+     Web-Asp-Net45, Web-Net-Ext45, Web-Http-Redirect, Web-Windows-Auth, Web-Url-Auth
+   ```
+
+   4. Run the Appliance Installer
    ```powershell
    Set-Location "C:\AzureMigrateAppliance"
    Set-ExecutionPolicy -Scope Process Bypass -Force
@@ -156,27 +169,13 @@ If it doesn’t exist yet, create it through the **Discover** flow:
    .\AzureMigrateInstaller.ps1
    ```
 
-4. **If you hit the deprecated PowerShell ISE feature error** on Windows Server 2022/2025:  
-   - Run installer prerequisites **without** ISE and re-run:  
-     ```powershell
-     Install-WindowsFeature WAS, WAS-Process-Model, WAS-Config-APIs, `
-       Web-Server, Web-WebServer, Web-Mgmt-Service, Web-Request-Monitor, `
-       Web-Common-Http, Web-Static-Content, Web-Default-Doc, Web-Dir-Browsing, Web-Http-Errors, `
-       Web-App-Dev, Web-CGI, `
-       Web-Health, Web-Http-Logging, Web-Log-Libraries, `
-       Web-Security, Web-Filtering, `
-       Web-Performance, Web-Stat-Compression, `
-       Web-Mgmt-Tools, Web-Mgmt-Console, Web-Scripting-Tools, `
-       Web-Asp-Net45, Web-Net-Ext45, `
-       Web-Http-Redirect, Web-Windows-Auth, Web-Url-Auth
-     .\AzureMigrateInstaller.ps1
-     ```
-   - Or remove ISE from the script and run again:  
+   - (Optional - if 5.4 fails) Remove ISE from the script and run again:  
      ```powershell
      Copy-Item .\AzureMigrateInstaller.ps1 .\AzureMigrateInstaller.ps1.bak
      (Get-Content .\AzureMigrateInstaller.ps1) -replace 'PowerShell-ISE,?\s*', '' | Set-Content .\AzureMigrateInstaller.ps1
      .\AzureMigrateInstaller.ps1
      ```
+
 5. **Confirm the configuration UI is reachable** (Using URL like `https://<VMName>:44368`):  
    ```powershell
    $u = "https://$env:COMPUTERNAME:44368"
