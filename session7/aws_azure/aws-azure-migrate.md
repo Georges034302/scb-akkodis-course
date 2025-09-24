@@ -79,7 +79,57 @@ If it doesn’t exist yet, create it through the **Discover** flow:
    - Navigate to **Site Recovery infrastructure → ASR replication appliances**.  
    - Your registered appliance will appear here *after Step 5 registration*.  
 
----
+### C. Assign Required Roles (Azure Migrate + ASR)
+
+For the **Azure Migrate appliance** to register and synchronize with the **Recovery Services Vault**, assign these roles:
+
+- **Contributor** → Resource Group (target RG)  
+- **Site Recovery Contributor** → Recovery Services Vault  
+- **Network Contributor** → Virtual Network (target VNet)  
+- *(Optional)* **Reader** → Subscription  
+
+#### Contributor on the Target Resource Group
+1. In the [Azure Portal](https://portal.azure.com), search for **Resource groups**.  
+2. Open your **target RG** (e.g., `$TGT_RG`).  
+3. In the left menu, select **Access control (IAM)** → **+ Add** → **Add role assignment**.  
+4. In the **Role** tab, search for and select **Contributor**.  
+5. Click **Next** → in **Members**, choose **User, group, or service principal**.  
+6. Select the account (user/SP) used for the migration/appliance.  
+7. Click **Review + Assign**.  
+
+
+#### Site Recovery Contributor on the Recovery Services Vault
+1. In the portal, search for **Recovery Services vaults**.  
+2. Open your vault (e.g., `aws-migration-vault`).  
+3. Go to **Access control (IAM)** → **+ Add** → **Add role assignment**.  
+4. Search for and select **Site Recovery Contributor**.  
+5. Under **Members**, select the same account as before.  
+6. Click **Review + Assign**.  
+
+#### Network Contributor on the Target VNet
+1. In the portal, search for **Virtual networks**.  
+2. Open your **target VNet** (e.g., `$TGT_VNET`).  
+3. Go to **Access control (IAM)** → **+ Add** → **Add role assignment**.  
+4. Choose **Network Contributor**.  
+5. Under **Members**, select the same account.  
+6. Click **Review + Assign**.  
+
+#### (Optional) Reader at Subscription Level
+1. In the portal, search for **Subscriptions**.  
+2. Open your target subscription.  
+3. Go to **Access control (IAM)** → **+ Add** → **Add role assignment**.  
+4. Select **Reader**.  
+5. Add the same account as a member.  
+6. Click **Review + Assign**.  
+
+## ✅ End Result
+Your migration account/appliance now has:
+- **Contributor** on the Resource Group  
+- **Site Recovery Contributor** on the Vault  
+- **Network Contributor** on the VNet  
+- *(Optional)* **Reader** on the Subscription  
+
+This ensures the appliance can **register**, **replicate**, and **cut over workloads** into Azure successfully.
 
 ✅ With the **Project Key**, **Appliance package**, and **ASR Vault** ready, you can now move to Step 4: creating the Appliance VM in AWS.
 
@@ -102,7 +152,7 @@ If it doesn’t exist yet, create it through the **Discover** flow:
 - **Storage**: Root 80 GiB **gp3** SSD.  
 - **Launch** → Decrypt `Administrator` password → **RDP** into the VM (once enabled).
 
-### Connect to the AWS Appliance VM via RDP
+### B. Connect to the AWS Appliance VM via RDP
 
 1. **Wait for the Instance to Initialize**  
    - In the **AWS EC2 Console**, check that your `AWS-Appliance-VM` instance status is **Running** and both health checks pass.  
