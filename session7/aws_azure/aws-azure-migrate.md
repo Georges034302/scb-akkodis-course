@@ -129,31 +129,6 @@ If it doesn’t exist yet, create it through the **Discover** flow:
 
 ---
 
-### Enable and Secure RDP from Session Manager
-
-Run these commands inside the Session Manager PowerShell session:
-
-```powershell
-# Ensure RDP service starts automatically
-Set-Service TermService -StartupType Automatic
-Start-Service TermService
-
-# Enable RDP in registry
-Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
-
-# Enable firewall rules for RDP
-Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-```
-
-### (Optional) Add a scheduled task so RDP always starts after reboot:
-```powershell
-$Action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-Command 'Start-Service TermService; Set-Service TermService -StartupType Automatic'"
-$Trigger = New-ScheduledTaskTrigger -AtStartup
-Register-ScheduledTask -Action $Action -Trigger $Trigger -TaskName "Ensure-RDP-Service" -RunLevel Highest -Force
-```
-
----
-
 ## 5) Set Up and Configure the Appliance
 
 ### 5.1) Install the Appliance (Windows VM)
