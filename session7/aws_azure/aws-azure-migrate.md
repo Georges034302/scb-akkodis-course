@@ -83,20 +83,9 @@ If it doesn’t exist yet, create it through the **Discover** flow:
 
 For the **Azure Migrate appliance** to register and synchronize with the **Recovery Services Vault**, assign these roles:
 
-- **Contributor** → Resource Group (target RG)  
 - **Site Recovery Contributor** → Recovery Services Vault  
 - **Network Contributor** → Virtual Network (target VNet)  
 - *(Optional)* **Reader** → Subscription  
-
-#### Contributor on the Target Resource Group
-1. In the [Azure Portal](https://portal.azure.com), search for **Resource groups**.  
-2. Open your **target RG** (e.g., `$TGT_RG`).  
-3. In the left menu, select **Access control (IAM)** → **+ Add** → **Add role assignment**.  
-4. In the **Role** tab, search for and select **Contributor**.  
-5. Click **Next** → in **Members**, choose **User, group, or service principal**.  
-6. Select the account (user/SP) used for the migration/appliance.  
-7. Click **Review + Assign**.  
-
 
 #### Site Recovery Contributor on the Recovery Services Vault
 1. In the portal, search for **Recovery Services vaults**.  
