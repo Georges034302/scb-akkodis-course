@@ -34,17 +34,11 @@ Run from the Session 7 folder. This script prepares **both** sides for ASR:
 
 ```bash
 chmod +x lab2-env.sh
-```
 
-```bash
 ./lab2-env.sh login
-```
 
-```bash
 ./lab2-env.sh init
-```
 
-```bash
 ./lab2-env.sh status
 ```
 
