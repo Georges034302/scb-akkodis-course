@@ -84,8 +84,6 @@ If it doesn’t exist yet, create it through the **Discover** flow:
 For the **Azure Migrate appliance** to register and synchronize with the **Recovery Services Vault**, assign these roles:
 
 - **Site Recovery Contributor** → Recovery Services Vault  
-- **Network Contributor** → Virtual Network (target VNet)  
-- *(Optional)* **Reader** → Subscription  
 
 #### Site Recovery Contributor on the Recovery Services Vault
 1. In the portal, search for **Recovery Services vaults**.  
@@ -94,29 +92,6 @@ For the **Azure Migrate appliance** to register and synchronize with the **Recov
 4. Search for and select **Site Recovery Contributor**.  
 5. Under **Members**, select the same account as before.  
 6. Click **Review + Assign**.  
-
-#### Network Contributor on the Target VNet
-1. In the portal, search for **Virtual networks**.  
-2. Open your **target VNet** (e.g., `$TGT_VNET`).  
-3. Go to **Access control (IAM)** → **+ Add** → **Add role assignment**.  
-4. Choose **Network Contributor**.  
-5. Under **Members**, select the same account.  
-6. Click **Review + Assign**.  
-
-#### (Optional) Reader at Subscription Level
-1. In the portal, search for **Subscriptions**.  
-2. Open your target subscription.  
-3. Go to **Access control (IAM)** → **+ Add** → **Add role assignment**.  
-4. Select **Reader**.  
-5. Add the same account as a member.  
-6. Click **Review + Assign**.  
-
-## ✅ End Result
-Your migration account/appliance now has:
-- **Contributor** on the Resource Group  
-- **Site Recovery Contributor** on the Vault  
-- **Network Contributor** on the VNet  
-- *(Optional)* **Reader** on the Subscription  
 
 This ensures the appliance can **register**, **replicate**, and **cut over workloads** into Azure successfully.
 
