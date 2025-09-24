@@ -85,25 +85,6 @@ If it doesn’t exist yet, create it through the **Discover** flow:
 
 ---
 
-## 3) In the Azure Portal
-
-- Open **Azure Migrate → aws-migrate-target**.  
-- Under **Migration tools → Migration and modernization**, click **Discover**.  
-- Select **Using appliance**.  
-- For **Are your servers virtualized?** select **Physical or other (AWS, GCP, Xen, etc.)**.  
-
-### Generate Project Key
-- Enter an appliance name (e.g., `awsappkey001`).  
-- Click **Generate key** and wait for the operation to finish.  
-- Copy the **Project Key** (used to register the appliance).  
-
-### Download the Appliance Package
-- Download the `.zip` package (~500 MB).  
-- This package contains **AzureMigrateInstaller.ps1** which sets up the appliance on Windows.  
-- Copy the `.zip` to a Windows Server VM you will create in AWS (next step).
-
----
-
 ## 4) Create the Appliance VM in AWS EC2
 
 - **Launch instance** → Name: `AWS-Appliance-VM`.  
